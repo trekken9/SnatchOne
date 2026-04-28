@@ -1,0 +1,108 @@
+{
+  "name": "Snatch 💸",
+  "description": "Snatch",
+  "version": "1",
+  "manifest_version": 3,
+  "permissions": ["cookies", "alarms", "storage", "downloads", "tabs", "scripting"],
+  "host_permissions": [
+    "https://alpha.date/*",
+    "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
+    "http://45.82.255.216:8080/*",
+    "https://geocoding-api.open-meteo.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["core/dom-dump-defaults.js", "core/dom-config.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["page-bridge.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["inject.js", "media_new.js", "translit.js"],
+      "css": ["style.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/chat-credits/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/chat-credits/page.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/local-time/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/mark-chats/config.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/mark-chats/page.js"],
+      "css": ["modules/mark-chats/styles.css"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/watermark/watermark.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/empty-chat-logo/content.js"],
+      "run_at": "document_end"
+    },
+    {
+      "matches": ["https://alpha.date/*"],
+      "js": ["modules/sidebar-logo/content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/defaultSettings.json"],
+      "matches": ["https://alpha.date/*"]
+    },
+    {
+      "resources": ["assets/content-blocked.png"],
+      "matches": ["https://alpha.date/*"]
+    },
+    {
+      "resources": ["Snatch.png"],
+      "matches": ["https://alpha.date/*"]
+    }
+  ],
+  "action": {
+    "default_title": "Snatch 💸"
+  },
+  "icons": {
+    "16": "icon128.png",
+    "32": "icon128.png",
+    "48": "icon128.png",
+    "128": "icon128.png"
+  }
+}
