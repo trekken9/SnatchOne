@@ -1,0 +1,27 @@
+{
+  "emojiSelectorShortcut": {
+    "code": "Minus",
+    "ctrlKey": false,
+    "shiftKey": false,
+    "altKey": false
+  },
+  "translateShortcut": {
+    "code": "KeyA",
+    "ctrlKey": false,
+    "shiftKey": false,
+    "altKey": true
+  },
+  "autoToggleSwitch": true,
+  "emojiSelector": true,
+  "openEmojiSelectorOnInputFocus": true,
+  "showPrevSentMedias": true,
+  "targetLang": "ru",
+  "translateInputText": true,
+  "translateOnlyOnAlphaData": true,
+  "translateSelectedText": true,
+  "translateSelectedTextMode": "element",
+  "translationTooltipZoom": 75,
+  "fieldTargetLang": "en",
+  "blurIncoming": true,
+  "blurOutgoing": false
+}
