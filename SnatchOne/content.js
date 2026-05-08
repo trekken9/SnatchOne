@@ -2878,75 +2878,107 @@ function renderTools(e) {
       }
 
       if (t) {
-        // Строим интерфейс сразу, без запроса к серверу
-        const photo = "https://alpha.date/static/media/profile_img_empty.0b3d6665cd1c1b51de71.jpg";
+        return pageFetchJson(
+          `/api/operator/myProfile?user_id=${t}&activeProfile=false`,
+          { method: "GET", headers: h },
+        ).then(({ json: res }) => {
+          if (!res) throw new Error("Пустой ответ от myProfile");
+
+          // --- УЛЬТРА-ПОИСК: Ищет значение ВЕЗДЕ в ответе сервера ---
+          function findDeep(obj, key) {
+            if (typeof obj !== "object" || obj === null) return null;
+            if (obj.hasOwnProperty(key) && obj[key] !== null && obj[key] !== "")
+              return obj[key];
+            for (let k in obj) {
+              const result = findDeep(obj[k], key);
+              if (result !== null) return result;
+            }
+            return null;
+          }
+
+          const photo =
+            findDeep(res, "photo_link") ||
+            "https://alpha.date/static/media/profile_img_empty.0b3d6665cd1c1b51de71.jpg";
+          const nameStr = findDeep(res, "name") || "Unknown";
+          const ageStr = findDeep(res, "age") || "?";
+          s = `${nameStr}, ${ageStr}`; // Имя мужчины для файла
+
+          // --- УМНЫЙ ПОИСК ДАТЫ РЕГИСТРАЦИИ ---
+          const rawDate =
+            findDeep(res, "created_at") || findDeep(res, "date_created");
+          let createdStr = "—";
+          if (rawDate) {
+            let dateVal = rawDate;
+            // Защита от Unix формата (секунды vs миллисекунды)
+            if (typeof dateVal === "number" && dateVal < 10000000000)
+              dateVal *= 1000;
+            const pDate = new Date(dateVal);
+            if (!isNaN(pDate.getTime())) {
+              createdStr = pDate.toLocaleString("ru-RU", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+            }
+          }
+
+          // --- УМНЫЙ ПОИСК САЙТА РЕГИСТРАЦИИ ---
+          const rawSiteId = findDeep(res, "site_id");
+          const siteName = rawSiteId
+            ? ({
+                1: "SofiaDate.com",
+                2: "MySpecialDates.com",
+                5: "LoveForHeart.com",
+                6: "AmourMeet.com",
+                7: "OkAmour.com",
+                8: "Avodate.com",
+                9: "DateMpire.com",
+                10: "FeelFlame.com",
+                11: "LatiDate.com",
+                12: "SakuraDate.com",
+                13: "LatiDreams.com",
+                14: "NaomiDate.com",
+                15: "AmorPulse.com",
+                16: "NikaDate.com",
+                32: "MagnoliaDate.com",
+              }[rawSiteId] ?? `site_id: ${rawSiteId}`)
+            : "Скрыто сайтом";
 
           // --- ВЕРСТКА ИНТЕРФЕЙСА (ТРИ КОЛОНКИ) ---
 
-          // 1. Левая колонка: ПОЛЬЗОВАТЕЛЬ (Spend)
+          // 1. Левая колонка: МУЖЧИНА
           const manCol = elt(
             "div",
             { style: "text-align:center; flex:1; font-family:'Inter',system-ui,sans-serif;" },
-            elt("div", {
-              style: "font-size:36px; line-height:1; margin-bottom:10px;"
-            }, "👤"),
+            elt("img", {
+              src: photo,
+              style:
+                "width:80px; height:80px; object-fit:cover; border-radius:50%; margin-bottom:10px; border:3px solid #f1f2f6; box-shadow:0 4px 10px rgba(0,0,0,0.1)",
+            }),
             elt(
               "div",
-              { style: "font-weight:700; font-size:15px; color:#2d3436; margin-bottom:6px;" },
-              "Spend пользователя",
+              { style: "font-weight:800; font-size:18px; color:#2d3436" },
+              s,
+            ),
+            elt(
+              "div",
+              {
+                style:
+                  "font-size:11px; color:#636e72; margin-top:5px; background:#f1f2f6; display:inline-block; padding:2px 8px; border-radius:10px",
+              },
+              siteName,
+            ),
+            elt(
+              "div",
+              {
+                style:
+                  "font-size:12px; color:#00b894; margin-top:4px; font-weight:600",
+              },
+              `Рег: ${createdStr}`,
             ),
           );
-
-          // Spend: если есть ключ — показываем реальный spend, иначе TG-ссылку
-          const _hasKey = !!loadSet().authKey;
-          if (_hasKey && t) {
-            const spendValEl = elt("div", {
-              style: "font-size:12px;color:#b2bec3;margin-top:4px;font-family:'Inter',system-ui,sans-serif;"
-            }, "Загрузка...");
-            manCol.append(spendValEl);
-            chrome.runtime.sendMessage({ type: "getManSpend", manId: t }, (resp) => {
-              if (resp && resp.spend !== undefined && resp.spend !== null) {
-                const spendVal = parseFloat(resp.spend) || 0;
-                spendValEl.innerHTML = "";
-                spendValEl.append(
-                  elt("div", {
-                    style: "font-size:22px;font-weight:800;color:#047857;margin:6px 0 2px;font-variant-numeric:tabular-nums;"
-                  }, "$" + spendVal.toFixed(2)),
-                );
-                if (resp.dob) {
-                  spendValEl.append(
-                    elt("div", {
-                      style: "font-size:11px;color:#b2bec3;margin-top:2px;"
-                    }, "DOB: " + resp.dob),
-                  );
-                }
-              } else {
-                spendValEl.textContent = resp?.error || "Нет данных";
-                spendValEl.style.color = "#d63031";
-              }
-            });
-          } else {
-            manCol.append(
-              elt(
-                "a",
-                {
-                  href: "https://t.me/brachka_rass",
-                  target: "_blank",
-                  rel: "noopener noreferrer",
-                  style: [
-                    "display:inline-flex;align-items:center;gap:6px;",
-                    "padding:7px 16px;border-radius:10px;",
-                    "background:linear-gradient(135deg,#0088cc,#006aaa);",
-                    "color:#fff;font-size:12px;font-weight:600;",
-                    "text-decoration:none;margin-top:4px;",
-                    "font-family:'Inter',system-ui,sans-serif;",
-                    "box-shadow:0 4px 14px rgba(0,136,204,0.25);",
-                  ].join(""),
-                },
-                "✈️ Доступ в TG",
-              ),
-            );
-          }
 
           // 2. Центральная колонка: УПРАВЛЕНИЕ
 
@@ -3074,6 +3106,7 @@ function renderTools(e) {
                 a.innerHTML = "";
               });
           }
+        });
       } else {
         d.textContent = "Не удалось определить ID мужчины.";
         d.style.color = "#d32f2f";
