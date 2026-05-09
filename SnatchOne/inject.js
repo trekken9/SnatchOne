@@ -35178,11 +35178,11 @@ styleSheet.flush()
       const [balance, setBalance] = (0, react.useState)(null);
       const [dob, setDob] = (0, react.useState)(null);
       const [container, setContainer] = (0, react.useState)(null);
+      const [licensed, setLicensed] = (0, react.useState)(false);
 
-      // 1. НОВАЯ ЛОГИКА: ВСТАВЛЯЕМ В ГЛАВНУЮ ШАПКУ
+      // 1. ВСТАВЛЯЕМ В ГЛАВНУЮ ШАПКУ
       (0, react.useEffect)(() => {
         const fixLayout = () => {
-          // Ищем ГЛАВНУЮ шапку (родителя всех элементов)
           const chatHeader = document.querySelector(
             '[data-testid="chat-header"]',
           );
@@ -35192,12 +35192,10 @@ styleSheet.flush()
             return;
           }
 
-          // Ищем блок с кнопками по середине (чтобы встать ПЕРЕД ним)
           const middleBlock =
             chatHeader.querySelector('[class*="_middle__"]') ||
             chatHeader.querySelector('[data-testid="options-btn"]');
 
-          // Создаем или находим наш блок
           let balanceContainer = chatHeader.querySelector(
             ".balance-info-styled",
           );
@@ -35205,36 +35203,26 @@ styleSheet.flush()
             balanceContainer = document.createElement("div");
             balanceContainer.className = "balance-info-styled";
 
-            // ВСТАВКА:
             if (middleBlock) {
-              // Если нашли середину -> встаем ПЕРЕД ней.
-              // Получится: [Профиль Мужчины] [НАШ БЛОК] [Кнопки] [Профиль Женщины]
               chatHeader.insertBefore(balanceContainer, middleBlock);
             } else {
-              // Если вдруг середины нет, ставим вторым (сразу после профиля мужчины)
               chatHeader.insertBefore(balanceContainer, chatHeader.children[1]);
             }
           }
 
-          // СТИЛИ: Теперь нам не нужны margin: auto, так как мы стоим в отдельной ячейке
           balanceContainer.style.cssText = "";
           Object.assign(balanceContainer.style, {
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
             alignItems: "center",
-
-            // Отступы для красоты
             marginLeft: "10px",
             marginRight: "10px",
-
             zIndex: "1",
-            pointerEvents: "auto", // Кнопка кликабельна
+            pointerEvents: "auto",
             whiteSpace: "nowrap",
-            flexShrink: "0", // Не сжиматься
-
-            // Цвет и шрифт
-            fontFamily: "Consolas, monospace",
+            flexShrink: "0",
+            fontFamily: "'Inter', system-ui, sans-serif",
             lineHeight: "1.2",
             color: "#ffffff",
           });
@@ -35249,7 +35237,27 @@ styleSheet.flush()
         return () => observer.disconnect();
       }, []);
 
-      // 2. ДАННЫЕ (Без изменений)
+      // 2. ПРОВЕРКА ЛИЦЕНЗИИ
+      (0, react.useEffect)(() => {
+        chrome.storage.local.get(["snExpSec", "snSet"], (res) => {
+          const exp = Number(res.snExpSec) || 0;
+          const settings = res.snSet || {};
+          setLicensed(exp > 0 && !!settings.authKey);
+        });
+        const onChange = (changes, area) => {
+          if (area === "local" && (changes.snExpSec || changes.snSet)) {
+            chrome.storage.local.get(["snExpSec", "snSet"], (res) => {
+              const exp = Number(res.snExpSec) || 0;
+              const settings = res.snSet || {};
+              setLicensed(exp > 0 && !!settings.authKey);
+            });
+          }
+        };
+        chrome.storage.onChanged.addListener(onChange);
+        return () => chrome.storage.onChanged.removeListener(onChange);
+      }, []);
+
+      // 3. ДАННЫЕ БАЛАНСА
       (0, react.useEffect)(() => {
         if (!profileId) {
           setBalance(null);
@@ -35282,17 +35290,88 @@ styleSheet.flush()
 
       if (!container) return null;
 
-      // 3. ДИЗАЙН
-      const dataStyle = {
-        color: "#dbffffff",
-        fontSize: "14px",
-        fontWeight: "bold",
-        margin: "0",
-      };
+      // 4. РЕНДЕР — зависит от лицензии
+      if (licensed) {
+        // === ЛИЦЕНЗИЯ АКТИВНА — показываем реальный Spend ===
+        const spendAmount = balance != null ? `$${parseFloat(balance).toFixed(2)}` : "—";
 
+        let regDateStr = "—";
+        if (dob) {
+          try {
+            let d = dob;
+            if (typeof d === "number" && d < 10000000000) d *= 1000;
+            const dt = new Date(d);
+            if (!isNaN(dt.getTime())) {
+              regDateStr = dt.toLocaleDateString("ru-RU", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              });
+            }
+          } catch (_) {}
+        }
+
+        const isHigh = balance != null && parseFloat(balance) >= 100;
+        const isMedium = balance != null && parseFloat(balance) >= 20 && parseFloat(balance) < 100;
+
+        const amountColor = isHigh ? "#00e676" : isMedium ? "#ffd740" : "#fff";
+        const glowColor = isHigh ? "rgba(0,230,118,0.4)" : isMedium ? "rgba(255,215,64,0.3)" : "none";
+
+        return (0, react_dom.createPortal)(
+          (0, jsx_runtime.jsxs)("div", {
+            style: {
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "3px",
+            },
+            children: [
+              // Заголовок
+              (0, jsx_runtime.jsx)("div", {
+                style: {
+                  fontSize: "9px",
+                  fontWeight: "600",
+                  color: "rgba(255,255,255,0.55)",
+                  textTransform: "uppercase",
+                  letterSpacing: "1.2px",
+                  marginBottom: "1px",
+                },
+                children: "Spend",
+              }),
+              // Сумма
+              (0, jsx_runtime.jsx)("div", {
+                style: {
+                  fontSize: "20px",
+                  fontWeight: "800",
+                  color: amountColor,
+                  fontFamily: "'Consolas', 'SF Mono', monospace",
+                  letterSpacing: "-0.5px",
+                  lineHeight: "1",
+                  textShadow: glowColor !== "none" ? `0 0 12px ${glowColor}` : "none",
+                },
+                children: spendAmount,
+              }),
+              // Дата регистрации
+              (0, jsx_runtime.jsx)("div", {
+                style: {
+                  fontSize: "10px",
+                  color: "rgba(255,255,255,0.5)",
+                  fontWeight: "500",
+                  marginTop: "1px",
+                },
+                children: `Рег: ${regDateStr}`,
+              }),
+            ],
+          }),
+          container,
+        );
+      }
+
+      // === ЛИЦЕНЗИЯ НЕ АКТИВНА — заглушка с TG ссылкой ===
       return (0, react_dom.createPortal)(
         (0, jsx_runtime.jsxs)("div", {
-          style: { textAlign: "center" }, // Центруем текст внутри
+          style: { textAlign: "center" },
           children: [
             (0, jsx_runtime.jsx)("div", {
               style: {
@@ -35323,11 +35402,10 @@ styleSheet.flush()
               },
               children: "✈️ Доступ в TG",
             }),
-          // Кнопка стоп-листа скрыта
-        ],
-      }),
-      container,
-    );
+          ],
+        }),
+        container,
+      );
   };
 
     // ./node_modules/@chakra-ui/react/dist/esm/box/box.mjs
