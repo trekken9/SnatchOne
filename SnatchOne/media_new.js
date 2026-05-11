@@ -745,8 +745,13 @@ if (window.__ADGM_LOADED_VERSION__ === __ADGM_VERSION__) {
   /**
    * Создаёт/обновляет кнопку Bulk Delete рядом с кнопкой фильтра.
    * Bug #8 fix: проверяем флаг на toolbar чтобы не делать querySelector на каждый MO-тик.
+   * ОТКЛЮЧЕНО: кнопка удаления больше не создаётся
    */
   function buildBulkTrashBtn(modalRoot) {
+    // Функция отключена - кнопка не создаётся
+    return null;
+    
+    /* ОТКЛЮЧЕНО
     if (!modalRoot) return null;
     const toolbar = x(modalRoot);
     if (!toolbar) return null;
@@ -774,6 +779,7 @@ if (window.__ADGM_LOADED_VERSION__ === __ADGM_VERSION__) {
     }
     toolbar.dataset.adgmTrashBound = "1";
     return btn;
+    */
   }
 
   /**

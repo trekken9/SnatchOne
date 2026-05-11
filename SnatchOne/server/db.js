@@ -30,15 +30,21 @@ db.serialize(() => {
         current_uses INTEGER DEFAULT 0
     )`);
 
-  // 3. Создаем Супер-Админа по умолчанию
+  // 3. Создаем Супер-Админа по умолчанию (только если таблица пустая)
   db.get("SELECT id FROM users WHERE role = 'superadmin'", (err, row) => {
     if (!row) {
-      const hash = bcrypt.hashSync("admin123", 10);
+      const crypto = require("crypto");
+      // Генерируем случайный пароль — НЕ хардкодим admin123
+      const randomPassword = crypto.randomBytes(8).toString("hex");
+      const hash = bcrypt.hashSync(randomPassword, 10);
       db.run(
         "INSERT INTO users (username, password, role, nickname) VALUES (?, ?, ?, ?)",
         ["admin", hash, "superadmin", "Генеральный Босс"],
       );
-      console.log("👑 Создан главный админ: логин 'admin', пароль 'admin123'");
+      console.log("👑 Создан главный админ:");
+      console.log(`   Логин:  admin`);
+      console.log(`   Пароль: ${randomPassword}`);
+      console.log("   ⚠️  Сохраните пароль — он больше не будет показан!");
     }
   });
 });

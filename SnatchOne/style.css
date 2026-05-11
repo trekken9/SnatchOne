@@ -10,9 +10,26 @@
   font-family: 'Montserrat', sans-serif !important;
 }
 
-/* 2. А для нашего расширения ставим красивый системный шрифт (чтобы цифры и меню были четкими) */
-#telescope-content-script {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+:root {
+  --sn-ext-font-size: 12px;
+  --sn-notify-font-size: 10px;
+}
+
+/* 2. А для нашего расширения ставим Montserrat динамически */
+#telescope-content-script,
+.sne-earn,
+.ah-earnings-portal,
+.sn-dialogs-counter,
+.ad-ext-credits {
+  font-family: 'Montserrat', sans-serif !important;
+  font-size: var(--sn-ext-font-size) !important;
+}
+
+.sne-earn__inner,
+.sne-earn__toast,
+.sne-earn__statrow,
+.sne-earn__histrow {
+  font-size: var(--sn-notify-font-size) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -22,13 +39,12 @@
 /* Основной контейнер */
 .ah-earnings-portal {
   background: #ffffff !important;
-  border: 1px solid #ebebeb !important;
+  border: 1px solid #eef0f2 !important;
   border-radius: 12px !important;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.08) !important;
-  padding: 14px 16px !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  min-width: 220px !important;
-  max-width: 280px !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06) !important;
+  padding: 12px 14px !important;
+  min-width: 200px !important;
+  max-width: 260px !important;
 }
 
 /* Сумма — крупно и чисто */
@@ -177,4 +193,50 @@
 /* Наша панель — без задержки, сразу видна */
 .ah-pinned-wrapper {
   animation: none !important;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS SORT FILTER — стили для кнопки Actions
+   ═══════════════════════════════════════════════════════════ */
+
+/* Стили для чекбокса Actions - более компактный */
+[data-testid="actions-button"] {
+  transition: all 0.2s ease;
+  margin-left: -4px !important;
+  margin-right: -4px !important;
+}
+
+[data-testid="actions-button"] .MuiFormControlLabel-label {
+  font-size: 14px !important;
+  padding-left: 6px !important;
+}
+
+[data-testid="actions-button"] .MuiCheckbox-root {
+  padding: 6px !important;
+}
+
+[data-testid="actions-button"]:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+}
+
+/* Иконка активности */
+[data-testid="actions-button"] svg {
+  color: #6366f1;
+  transition: color 0.2s ease;
+}
+
+[data-testid="actions-button"] input:checked ~ svg {
+  color: #4f46e5;
+}
+
+/* Поддержка flexbox для сортировки */
+[data-testid="chat-list"] {
+  /* Flexbox будет установлен через JS только при активной сортировке */
+}
+
+[data-testid="chat-list"] > * {
+  /* Плавный переход при изменении order */
+  transition: order 0s;
 }

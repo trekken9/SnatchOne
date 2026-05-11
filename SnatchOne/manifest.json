@@ -60,7 +60,8 @@
         "inject.js",
         "media_new.js",
         "translit.js",
-        "chat-search.js"
+        "chat-search.js",
+        "actions-sort.js"
       ],
       "css": [
         "style.css"

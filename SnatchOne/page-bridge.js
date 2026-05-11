@@ -31,6 +31,10 @@ const INFLIGHT = new Map();
     window.postMessage({ src: "SN_PAGE", type: "SN_READY" }, location.origin);
   } catch {}
   window.addEventListener("message", async (i) => {
+    // БЕЗОПАСНОСТЬ: Принимаем сообщения только от текущей страницы (того же origin).
+    // Без этой проверки любой iframe или открытая вкладка могла бы отправить
+    // SN_FETCH_REQ и заставить page-bridge сделать авторизованный fetch с куками.
+    if (i.origin !== location.origin) return;
     const s = i.data;
     if (!s || "SN_SW" !== s.src) return;
     if ("SN_PING" === s.type) {

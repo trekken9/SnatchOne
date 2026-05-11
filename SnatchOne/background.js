@@ -57,7 +57,7 @@ function getCacheStats() {
     misses: cacheMisses,
     hitRate: `${hitRate}%`,
     userDetailSize: USER_DETAIL_CACHE.size,
-    lastMessageSize: LAST_MESSAGE_CACHE.size
+    lastMessageSize: LAST_MESSAGE_CACHE.size,
   };
 }
 // ═══════════════════════════════════════════════════════════
@@ -76,11 +76,12 @@ function logPerf(label, duration) {
 // Экспорт статистики (доступно через chrome.runtime.sendMessage)
 globalThis.getPerformanceStats = () => {
   if (PERF_LOG.length === 0) return { avg: 0, log: [] };
-  const avg = PERF_LOG.reduce((sum, x) => sum + x.duration, 0) / PERF_LOG.length;
-  return { 
-    avg: avg.toFixed(0), 
+  const avg =
+    PERF_LOG.reduce((sum, x) => sum + x.duration, 0) / PERF_LOG.length;
+  return {
+    avg: avg.toFixed(0),
     count: PERF_LOG.length,
-    log: PERF_LOG.slice(-20) // последние 20 записей
+    log: PERF_LOG.slice(-20), // последние 20 записей
   };
 };
 // ═══════════════════════════════════════════════════════════
@@ -523,15 +524,15 @@ function connectWs(e, t, a) {
                 snLastStatsTime: Date.now(),
                 snDialogsFound: msg.dialogsFound || 0,
               });
-              
+
               // ЗАДАЧА #3: Обновляем бейдж с количеством шансов
               const dialogsCount = msg.dialogsFound || 0;
-              chrome.storage.local.get(['snRunning'], (data) => {
+              chrome.storage.local.get(["snRunning"], (data) => {
                 if (data.snRunning) {
                   setBadge("Running", dialogsCount);
                 }
               });
-              
+
               return; // Дальше не обрабатываем
             }
             // ------------------------------------
@@ -685,7 +686,8 @@ async function buildFullTable({ id: e, firstPageOnly: t = 0 }) {
   async function c(e, t = !1) {
     const a = t ? [e] : Array.from({ length: 5 }, (t, a) => e + a); // 3 → 5 страниц
     let o = !1;
-    for (let e = 0; e < a.length; e += 5) { // 3 → 5 параллельно
+    for (let e = 0; e < a.length; e += 5) {
+      // 3 → 5 параллельно
       const t = a.slice(e, e + 5);
       for (const e of t)
         if (performance.now() - s > 19700)
@@ -747,7 +749,7 @@ async function buildFullTable({ id: e, firstPageOnly: t = 0 }) {
           const cachedDetails = [];
           const cachedMessages = [];
           const uncachedUids = [];
-          
+
           for (const uid of u) {
             const detail = getCachedUserDetail(uid);
             const message = getCachedLastMessage(uid);
@@ -758,32 +760,46 @@ async function buildFullTable({ id: e, firstPageOnly: t = 0 }) {
               uncachedUids.push(uid);
             }
           }
-          
+
           // Логируем эффективность кэша
           if (cachedDetails.length > 0) {
-            console.log(`🎯 Cache hit: ${cachedDetails.length}/${u.length} (${((cachedDetails.length/u.length)*100).toFixed(0)}%)`);
+            console.log(
+              `🎯 Cache hit: ${cachedDetails.length}/${u.length} (${((cachedDetails.length / u.length) * 100).toFixed(0)}%)`,
+            );
           }
-          
+
           // Запрашиваем только некэшированные
           if (uncachedUids.length > 0) {
             [m, p] = await Promise.all([
-              fetchJSON("/api/chatList/userDetail", { chat_uid: uncachedUids }, r, {
-                referer: "https://alpha.date/chance",
-              }),
-              fetchJSON("/api/chatList/lastMessage", { chat_uid: uncachedUids }, r, {
-                referer: "https://alpha.date/chance",
-              }),
+              fetchJSON(
+                "/api/chatList/userDetail",
+                { chat_uid: uncachedUids },
+                r,
+                {
+                  referer: "https://alpha.date/chance",
+                },
+              ),
+              fetchJSON(
+                "/api/chatList/lastMessage",
+                { chat_uid: uncachedUids },
+                r,
+                {
+                  referer: "https://alpha.date/chance",
+                },
+              ),
             ]);
-            
+
             // Сохраняем в кэш
             if (m?.response) {
-              for (const item of m.response) setCachedUserDetail(item.chat_uid, item);
+              for (const item of m.response)
+                setCachedUserDetail(item.chat_uid, item);
             }
             if (p?.response) {
-              for (const item of p.response) setCachedLastMessage(item.chat_uid, item);
+              for (const item of p.response)
+                setCachedLastMessage(item.chat_uid, item);
             }
           }
-          
+
           // Объединяем кэшированные и новые данные
           m.response = [...cachedDetails, ...(m?.response || [])];
           p.response = [...cachedMessages, ...(p?.response || [])];
@@ -851,7 +867,7 @@ async function buildFullTable({ id: e, firstPageOnly: t = 0 }) {
   // МОНИТОРИНГ: Логируем время выполнения BuildFullTable
   // ═══════════════════════════════════════════════════════════
   const totalDuration = performance.now() - s;
-  logPerf('BuildFullTable', totalDuration);
+  logPerf("BuildFullTable", totalDuration);
   // ═══════════════════════════════════════════════════════════
   return h();
   function h() {
@@ -949,9 +965,28 @@ async function fetchJSON(e, t, a = {}, r = {}) {
   }
   throw c || new Error("request failed");
 }
+// Возвращает { url, headers } — auth-параметры передаются в заголовках,
+// а не в URL, чтобы они не попадали в логи nginx/apache/прокси.
 function snUrl(e, { auth: t, opId: a, action: r, hash: s }) {
-  const o = (t || "").slice(0, 16);
-  return `${e}?${new URLSearchParams({ "SN-Auth": o, "SN-OperatorID": a || "", "SN-Action": r || "", "SN-JSON-SHA1": s || "", "SN-JSON-Len": String(lastPayload?.length || 0), ver: EXT_VERSION }).toString()}`;
+  const o = (t || "").trim(); // ключ уже SHA256-хеш из content.js, не обрезаем
+  const url = `${e}?${new URLSearchParams({
+    "SN-Action": r || "",
+    "SN-JSON-SHA1": s || "",
+    "SN-JSON-Len": String(lastPayload?.length || 0),
+    ver: EXT_VERSION,
+  }).toString()}`;
+  const headers = {
+    "SN-Auth": o,
+    "SN-OperatorID": a || "",
+  };
+  return { url, headers };
+}
+// Обёртка для обратной совместимости — там где нужен только URL (старые вызовы)
+function snUrlStr(e, opts) { return snUrl(e, opts).url; }
+// Обёртка для fetch с правильными заголовками
+async function snFetch(e, opts, fetchOptions = {}) {
+  const { url, headers } = snUrl(e, opts);
+  return fetch(url, { ...fetchOptions, headers: { ...(fetchOptions.headers || {}), ...headers } });
 }
 function handleForbidden(e) {
   // Ловим и 401 (истек срок), и 403 ошибку от сервера
@@ -981,17 +1016,33 @@ function handleForbidden(e) {
   );
 }
 function purgeAuth() {
-  // Возвращаем жесткое удаление данных сессии при блокировке сервером
+  // Жесткое удаление данных сессии при любой попытке абьюза
   chrome.storage.local.remove([
     "snLastPayload",
     "snLastHash",
     "snLastHeaders",
     "snRunning",
+    "snHookedOperatorId", // КРИТИЧНО: без этого старый ID оператора утекает в новую сессию
+    "snJwt",              // JWT тоже сбрасываем — он принадлежал предыдущему аккаунту
   ]);
   lastPayload = "";
   lastHash = "";
   lastHeaders = {};
   wsActive = false;
+  bearerToken = null; // Сбрасываем токен в памяти — он принадлежит старому аккаунту
+
+  // КРИТИЧНО: Принудительно обрываем связь с сервером
+  if (wsPingTmr) {
+    clearInterval(wsPingTmr);
+    wsPingTmr = null;
+  }
+  if (snWs) {
+    try {
+      snWs.close();
+    } catch (e) {}
+    snWs = null;
+  }
+
   setBadge("None");
   chrome.tabs.query({}, (tabs) => {
     for (const tab of tabs) {
@@ -1004,7 +1055,8 @@ function purgeAuth() {
 function setBadge(e, dialogsCount = null) {
   if ("Running" === e) {
     // Если передано количество диалогов, показываем его
-    const badgeText = dialogsCount !== null && dialogsCount > 0 ? String(dialogsCount) : "▶";
+    const badgeText =
+      dialogsCount !== null && dialogsCount > 0 ? String(dialogsCount) : "▶";
     chrome.action.setBadgeText({ text: badgeText });
     chrome.action.setBadgeBackgroundColor({ color: "#4caf50" });
   } else if ("Stopped" === e) {
@@ -1060,24 +1112,22 @@ async function sendUpdate() {
       void (snWs && (snWs.close(), (snWs = null)))
     );
   const r = await fetchCurrentOperatorId(t, a);
-  if (r && r !== lastHeaders["SN-OperatorID"])
-    return (
-      (wsActive = !1),
-      wsPingTmr && (clearInterval(wsPingTmr), (wsPingTmr = null)),
-      void (snWs && (snWs.close(), (snWs = null)))
-    );
+  if (r && String(r) !== String(lastHeaders["SN-OperatorID"])) {
+    console.warn("🛑 Фоновая проверка выявила смену кабинета! Отключаем.");
+    purgeAuth();
+    return;
+  }
   await ensureEndpointLoaded();
-  const s = snUrl(snEndpoint, {
-    auth: lastHeaders["SN-Auth"],
-    opId: lastHeaders["SN-OperatorID"],
-    action: "Start",
-    hash: lastHash,
-  });
   try {
-    const e = await fetch(s, {
+    const e = await snFetch(snEndpoint, {
+      auth: lastHeaders["SN-Auth"],
+      opId: lastHeaders["SN-OperatorID"],
+      action: "Start",
+      hash: lastHash,
+    }, {
       method: "POST",
       body: lastPayload,
-      keepalive: !0,
+      keepalive: true,
     });
     (handleForbidden(e), extractExpSec(e));
     let t = {};
@@ -1147,51 +1197,82 @@ function getCfCookie() {
 }
 async function doBotAction(e, t) {
   const a = t?.tab?.id || null;
-  (await ensureEndpointLoaded(),
-    e.json && e.hash && ((lastPayload = e.json), (lastHash = e.hash)),
-    (lastHeaders = { "SN-Auth": e.key, "SN-OperatorID": e.opId }),
-    chrome.storage.local.set({
-      snLastPayload: lastPayload,
-      snLastHash: lastHash,
-      snLastHeaders: lastHeaders,
-    }));
+  await ensureEndpointLoaded();
+
+  // --- 🛑 АНТИ-АБЬЮЗ: ВСЕГДА ПОЛУЧАЕМ РЕАЛЬНЫЙ ID С САЙТА ---
+  const currentToken = await getBearerToken();
+  const currentProfiles = await getProfiles(currentToken);
+  const realOpId = await fetchCurrentOperatorId(currentToken, currentProfiles);
+
+  if (!realOpId) {
+    console.warn(
+      "🛑 [Анти-Абьюз] Не удалось определить реальный ID. Блокировка.",
+    );
+    purgeAuth();
+    return;
+  }
+
+  // ПРИНУДИТЕЛЬНО подменяем ID от фронтенда на реальный ID кабинета!
+  e.opId = String(realOpId);
+  // -----------------------------------------------------------
+
+  e.json && e.hash && ((lastPayload = e.json), (lastHash = e.hash));
+  lastHeaders = { "SN-Auth": e.key, "SN-OperatorID": e.opId };
+  chrome.storage.local.set({
+    snLastPayload: lastPayload,
+    snLastHash: lastHash,
+    snLastHeaders: lastHeaders,
+  });
+
   try {
-    const t = snUrl(snEndpoint, {
-        auth: lastHeaders["SN-Auth"],
-        opId: lastHeaders["SN-OperatorID"],
-        action: e.run,
-        hash: lastHash,
-      }),
-      r = await fetch(t, { method: "POST", body: lastPayload });
+    const r = await snFetch(snEndpoint, {
+      auth: lastHeaders["SN-Auth"],
+      opId: lastHeaders["SN-OperatorID"],
+      action: e.run,
+      hash: lastHash,
+    }, { method: "POST", body: lastPayload });
+
+    // Если сервер видит несовпадение Ключа и Реального ID - он вернет 403
     if (401 === r.status || 403 === r.status) return void purgeAuth();
+
     handleForbidden(r);
     extractExpSec(r);
     const s = await r
       .clone()
       .json()
       .catch(() => ({}));
-    "Start" === e.run &&
-      s.sid &&
-      s.wss_url &&
-      s.auth &&
-      ((wsActive = !0),
-      connectWs(s.sid, s.auth, s.wss_url),
-      a && ((lastSenderTabId = a), ensureWsPort(a)));
-  } catch (e) {
-    console.warn("[botAction] network error", e);
+
+    if ("Start" === e.run && s.sid && s.wss_url && s.auth) {
+      wsActive = !0;
+      connectWs(s.sid, s.auth, s.wss_url);
+      if (a) {
+        lastSenderTabId = a;
+        ensureWsPort(a);
+      }
+    }
+  } catch (err) {
+    console.warn("[botAction] network error", err);
   }
-  "Start" === e.run
-    ? ((wsActive = !0),
-      setBadge("Running"),
-      chrome.storage.local.set({ snRunning: !0 }),
-      chrome.alarms.create("snUpdate", { periodInMinutes: 1 }))
-    : "Stop" === e.run &&
-      ((wsActive = !1),
-      wsPingTmr && (clearInterval(wsPingTmr), (wsPingTmr = null)),
-      snWs && (snWs.close(), (snWs = null)),
-      setBadge("Stopped"),
-      chrome.storage.local.set({ snRunning: !1 }),
-      chrome.alarms.clear("snUpdate"));
+
+  if ("Start" === e.run) {
+    wsActive = !0;
+    setBadge("Running");
+    chrome.storage.local.set({ snRunning: !0 });
+    chrome.alarms.create("snUpdate", { periodInMinutes: 1 });
+  } else if ("Stop" === e.run) {
+    wsActive = !1;
+    if (wsPingTmr) {
+      clearInterval(wsPingTmr);
+      wsPingTmr = null;
+    }
+    if (snWs) {
+      snWs.close();
+      snWs = null;
+    }
+    setBadge("Stopped");
+    chrome.storage.local.set({ snRunning: !1 });
+    chrome.alarms.clear("snUpdate");
+  }
 }
 async function doPostHelper(e) {
   if ((await ensureEndpointLoaded(), !e.jwt))
@@ -1219,9 +1300,26 @@ async function doPostHelper(e) {
   let o = null;
 
   // 1. Пробуем из login hook (snHookedOperatorId)
+  // БЕЗОПАСНОСТЬ: Сравниваем сохранённый ID с реальным ID из profiles/inviteList,
+  // чтобы исключить случай когда в storage остался ID от предыдущего оператора.
   try {
-    const stored = await new Promise(resolve => chrome.storage.local.get(["snHookedOperatorId"], resolve));
-    if (stored.snHookedOperatorId) o = String(stored.snHookedOperatorId);
+    const stored = await new Promise((resolve) =>
+      chrome.storage.local.get(["snHookedOperatorId"], resolve),
+    );
+    if (stored.snHookedOperatorId) {
+      // Получаем реальный ID с сервера alpha.date для текущего JWT
+      const liveOpId = await fetchCurrentOperatorId(e.jwt ? null : null, a);
+      if (liveOpId && String(liveOpId) === String(stored.snHookedOperatorId)) {
+        // ID совпадает с живым сервером — доверяем
+        o = String(stored.snHookedOperatorId);
+      } else if (liveOpId) {
+        // В storage устаревший/чужой ID — используем живой и обновляем storage
+        console.warn(`[doPostHelper] snHookedOperatorId (${stored.snHookedOperatorId}) не совпадает с живым ID (${liveOpId}). Используем живой.`);
+        o = String(liveOpId);
+        chrome.storage.local.set({ snHookedOperatorId: o });
+      }
+      // Если liveOpId не получили — падаем вниз на inviteList-метод
+    }
   } catch {}
 
   // 2. Если нет — пробуем из inviteList (старый способ)
@@ -1292,14 +1390,37 @@ async function doPostHelper(e) {
   }
 
   if (!o) return { error: "operator_id не найден. Перелогиньтесь на сайте." };
+
+  // ═══ КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся что ключ принадлежит ЭТОМУ оператору ═══
+  // Вызываем /api/whohas (read-only) прежде чем делать /Init с привязкой.
+  // Это закрывает дыру: оператор Б не может воспользоваться ключом оператора А.
   try {
-    const t = snUrl(snEndpoint, {
+    await ensureEndpointLoaded();
+    const whohasBase = snEndpoint.replace(/\/$/, "") + "/api/whohas";
+    const whohasResp = await fetch(whohasBase, {
+      method: "POST",
+      headers: { "SN-Auth": e.key, "SN-OperatorID": o },
+    });
+    if (whohasResp.ok) {
+      const whohasData = await whohasResp.json().catch(() => null);
+      if (whohasData && !whohasData.match) {
+        console.error(`[doPostHelper] Ключ принадлежит другому аккаунту! Блокировка для ID: ${o}`);
+        return { error: "Доступ запрещен: этот ключ уже привязан к другому аккаунту." };
+      }
+    }
+  } catch (whohasErr) {
+    // Если проверка недоступна — не блокируем (сервер заблокирует сам через /check)
+    console.warn("[doPostHelper] whohas check failed, proceeding:", whohasErr);
+  }
+  // ══════════════════════════════════════════════════════════════════════════
+
+  try {
+    const a = await snFetch(snEndpoint, {
         auth: e.key,
         opId: o,
         action: "Init",
         hash: "",
-      }),
-      a = await fetch(t, { method: "POST" });
+      }, { method: "POST" });
     return (
       extractExpSec(a),
       {
@@ -1520,16 +1641,15 @@ async function enableSenderForProfile(profile, type, token) {
     chrome.alarms.create("snUpdate", { periodInMinutes: 1 });
   else {
     try {
-      const e = snUrl(snEndpoint, {
+      const t = await snFetch(snEndpoint, {
           auth: lastHeaders["SN-Auth"],
           opId: lastHeaders["SN-OperatorID"],
           action: "Start",
           hash: lastHash,
-        }),
-        t = await fetch(e, {
+        }, {
           method: "POST",
           body: lastPayload,
-          keepalive: !0,
+          keepalive: true,
         });
       (handleForbidden(t), extractExpSec(t));
       let a = {};
@@ -1566,36 +1686,104 @@ async function enableSenderForProfile(profile, type, token) {
       }
     }
   }),
-  chrome.action.onClicked.addListener((e) => {
-    e.id &&
-      chrome.tabs.sendMessage(e.id, "openModal", () => {
-        chrome.runtime.lastError;
-      });
+  chrome.action.onClicked.addListener(async (tab) => {
+    if (!tab.id) return;
+
+    // 1. Сначала отправляем сигнал в content.js, чтобы показать лоадер или просто "думать"
+    // (опционально, можно сразу делать проверку)
+
+    // 2. Получаем текущие данные из хранилища
+    const store = await new Promise((r) =>
+      chrome.storage.local.get(["snLastHeaders", "snJwt"], r),
+    );
+    const savedKey = store.snLastHeaders?.["SN-Auth"];
+
+    // Если ключа в памяти вообще нет — просто открываем окно (там будет ввод ключа)
+    if (!savedKey) {
+      return chrome.tabs.sendMessage(tab.id, "openModal");
+    }
+
+    try {
+      // 3. Достаем РЕАЛЬНЫЙ ID оператора с текущей страницы прямо сейчас
+      const token = store.snJwt || (await getBearerToken());
+      const profiles = await getProfiles(token);
+      const currentRealId = await fetchCurrentOperatorId(token, profiles);
+
+      if (!currentRealId) {
+        console.warn("Не удалось определить ID. Сброс.");
+        purgeAuth();
+        return chrome.tabs.sendMessage(tab.id, "openModal");
+      }
+
+      // 4. Шлем проверочный запрос на сервер с этим реальным ID
+      const response = await snFetch(snEndpoint, {
+        auth: savedKey,
+        opId: String(currentRealId),
+        action: "CheckAccess",
+      }, { method: "POST" });
+
+      // Если сервер ответил 403 (ID не совпал с привязанным) или 401
+      if (response.status === 403 || response.status === 401) {
+        console.error("Абьюз пресечен: ID не соответствует лицензии.");
+        purgeAuth(); // Удаляем ключ из памяти
+      }
+
+      // 5. Только теперь открываем окно.
+      // Если был сброс (purgeAuth), откроется окно ввода ключа.
+      // Если всё ок — откроется панель управления.
+      chrome.tabs.sendMessage(tab.id, "openModal");
+    } catch (err) {
+      console.error("Ошибка проверки при открытии:", err);
+      chrome.tabs.sendMessage(tab.id, "openModal");
+    }
   }),
   chrome.runtime.onMessage.addListener((e, t, a) => {
-    if ("token" === e?.type)
-      return (
-        (bearerToken = e.value || null),
-        void chrome.storage.local.set({ snJwt: bearerToken })
-      );
-    // ═══════════════════════════════════════════════════════════
-    // LOGIN HOOK: сохраняем operator_id и token из /api/login/login
-    // ═══════════════════════════════════════════════════════════
+    if ("token" === e?.type) {
+      // Заметили смену токена - сразу убиваем сессию
+      if (bearerToken && bearerToken !== e.value) {
+        console.warn("🛑 Обнаружена смена аккаунта (сменился токен)! Очистка.");
+        purgeAuth();
+      }
+      bearerToken = e.value || null;
+      chrome.storage.local.set({ snJwt: bearerToken });
+      return true;
+    }
+
     if ("loginHooked" === e?.type) {
       const opId = e.operator_id;
       const token = e.token;
-      console.log("[Snatch BG] Login hooked, operator_id:", opId);
-      if (token) {
-        bearerToken = token;
-        chrome.storage.local.set({ snJwt: token, snHookedOperatorId: opId });
+
+      // Обнаружена смена JWT (смена аккаунта в браузере) — немедленно всё чистим
+      if (bearerToken && bearerToken !== token) {
+        console.warn("🛑 Смена JWT (смена аккаунта)! Полная очистка.");
+        purgeAuth();
       }
-      return;
+
+      // Обнаружена смена operator_id — немедленно всё чистим
+      if (
+        lastHeaders &&
+        lastHeaders["SN-OperatorID"] &&
+        String(lastHeaders["SN-OperatorID"]) !== String(opId)
+      ) {
+        console.warn(`🛑 Смена кабинета! ${lastHeaders["SN-OperatorID"]} → ${opId}. Полная очистка.`);
+        purgeAuth();
+      }
+
+      // Устанавливаем новые данные только после очистки
+      if (token && opId) {
+        bearerToken = token;
+        // Атомарно сохраняем JWT и новый ID вместе — они всегда должны совпадать
+        chrome.storage.local.set({ snJwt: token, snHookedOperatorId: String(opId) });
+      }
+      return true;
     }
     if ("stopListUpdated" === e?.cmd) {
       // inject.js добавил ID в стоп-лист — уведомляем все вкладки чтобы content.js обновил AH_STORE
       chrome.tabs.query({ url: "https://alpha.date/*" }, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, { cmd: "reloadStop", value: e.value }).catch(() => {});
+        tabs.forEach((tab) => {
+          chrome.tabs
+            .sendMessage(tab.id, { cmd: "reloadStop", value: e.value })
+            .catch(() => {});
         });
       });
       return true;
@@ -1666,18 +1854,18 @@ function ensureWsPort(e) {
 
 // --- БАЛАНС + SPEND МУЖЧИНЫ ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === 'getBalance') {
+  if (request.type === "getBalance") {
     fetch("http://45.82.255.216:8080/balanceUdp/" + request.profileId)
-      .then(r => r.json())
-      .then(data => sendResponse({ balance: data.balance, dob: data.dob }))
+      .then((r) => r.json())
+      .then((data) => sendResponse({ balance: data.balance, dob: data.dob }))
       .catch(() => sendResponse({ error: "Нет связи" }));
     return true;
   }
   // Спенд мужчины с внешнего сервера
-  if (request.type === 'getManSpend') {
+  if (request.type === "getManSpend") {
     fetch("http://45.82.255.216:8080/balanceUdp/" + request.manId)
-      .then(r => r.json())
-      .then(data => sendResponse({ spend: data.balance, dob: data.dob }))
+      .then((r) => r.json())
+      .then((data) => sendResponse({ spend: data.balance, dob: data.dob }))
       .catch(() => sendResponse({ error: "Нет связи" }));
     return true;
   }
@@ -1709,8 +1897,18 @@ const AHT_DEFAULT_SETTINGS = {
   },
   options: {
     uiLanguage: "ru",
-    translator: { fontSizePx: 13, fontColor: "inherit", fontFamily: "inherit", italic: false },
-    chatCredits: { fontSizePx: 11, fontColor: "inherit", fontFamily: "inherit", italic: false },
+    translator: {
+      fontSizePx: 13,
+      fontColor: "inherit",
+      fontFamily: "inherit",
+      italic: false,
+    },
+    chatCredits: {
+      fontSizePx: 11,
+      fontColor: "inherit",
+      fontFamily: "inherit",
+      italic: false,
+    },
   },
 };
 
@@ -1737,59 +1935,133 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 // Country → primary timezone (for single-TZ countries or good approximations)
 const COUNTRY_DEFAULT_TZ = {
   // Europe
-  GB: "Europe/London",   IE: "Europe/Dublin",   PT: "Europe/Lisbon",
+  GB: "Europe/London",
+  IE: "Europe/Dublin",
+  PT: "Europe/Lisbon",
   IS: "Atlantic/Reykjavik",
-  FR: "Europe/Paris",    BE: "Europe/Brussels",  NL: "Europe/Amsterdam",
-  DE: "Europe/Berlin",   AT: "Europe/Vienna",    CH: "Europe/Zurich",
+  FR: "Europe/Paris",
+  BE: "Europe/Brussels",
+  NL: "Europe/Amsterdam",
+  DE: "Europe/Berlin",
+  AT: "Europe/Vienna",
+  CH: "Europe/Zurich",
   LU: "Europe/Luxembourg",
-  ES: "Europe/Madrid",   IT: "Europe/Rome",      MT: "Europe/Malta",
-  GR: "Europe/Athens",   CY: "Asia/Nicosia",
-  PL: "Europe/Warsaw",   CZ: "Europe/Prague",    SK: "Europe/Bratislava",
-  HU: "Europe/Budapest", SI: "Europe/Ljubljana", HR: "Europe/Zagreb",
-  BA: "Europe/Sarajevo", RS: "Europe/Belgrade",  ME: "Europe/Podgorica",
-  MK: "Europe/Skopje",   AL: "Europe/Tirane",
-  RO: "Europe/Bucharest", BG: "Europe/Sofia",
+  ES: "Europe/Madrid",
+  IT: "Europe/Rome",
+  MT: "Europe/Malta",
+  GR: "Europe/Athens",
+  CY: "Asia/Nicosia",
+  PL: "Europe/Warsaw",
+  CZ: "Europe/Prague",
+  SK: "Europe/Bratislava",
+  HU: "Europe/Budapest",
+  SI: "Europe/Ljubljana",
+  HR: "Europe/Zagreb",
+  BA: "Europe/Sarajevo",
+  RS: "Europe/Belgrade",
+  ME: "Europe/Podgorica",
+  MK: "Europe/Skopje",
+  AL: "Europe/Tirane",
+  RO: "Europe/Bucharest",
+  BG: "Europe/Sofia",
   TR: "Europe/Istanbul",
-  SE: "Europe/Stockholm", NO: "Europe/Oslo",     DK: "Europe/Copenhagen",
+  SE: "Europe/Stockholm",
+  NO: "Europe/Oslo",
+  DK: "Europe/Copenhagen",
   FI: "Europe/Helsinki",
-  EE: "Europe/Tallinn",  LV: "Europe/Riga",     LT: "Europe/Vilnius",
-  BY: "Europe/Minsk",    UA: "Europe/Kiev",      MD: "Europe/Chisinau",
+  EE: "Europe/Tallinn",
+  LV: "Europe/Riga",
+  LT: "Europe/Vilnius",
+  BY: "Europe/Minsk",
+  UA: "Europe/Kiev",
+  MD: "Europe/Chisinau",
   // FSU
-  RU: "Europe/Moscow",   KZ: "Asia/Almaty",
-  GE: "Asia/Tbilisi",    AM: "Asia/Yerevan",     AZ: "Asia/Baku",
-  UZ: "Asia/Tashkent",   TM: "Asia/Ashgabat",    TJ: "Asia/Dushanbe",
+  RU: "Europe/Moscow",
+  KZ: "Asia/Almaty",
+  GE: "Asia/Tbilisi",
+  AM: "Asia/Yerevan",
+  AZ: "Asia/Baku",
+  UZ: "Asia/Tashkent",
+  TM: "Asia/Ashgabat",
+  TJ: "Asia/Dushanbe",
   KG: "Asia/Bishkek",
   // Middle East
-  IL: "Asia/Jerusalem",  JO: "Asia/Amman",       LB: "Asia/Beirut",
-  SY: "Asia/Damascus",   IQ: "Asia/Baghdad",     IR: "Asia/Tehran",
-  SA: "Asia/Riyadh",     AE: "Asia/Dubai",       QA: "Asia/Qatar",
-  KW: "Asia/Kuwait",     BH: "Asia/Bahrain",     OM: "Asia/Muscat",
+  IL: "Asia/Jerusalem",
+  JO: "Asia/Amman",
+  LB: "Asia/Beirut",
+  SY: "Asia/Damascus",
+  IQ: "Asia/Baghdad",
+  IR: "Asia/Tehran",
+  SA: "Asia/Riyadh",
+  AE: "Asia/Dubai",
+  QA: "Asia/Qatar",
+  KW: "Asia/Kuwait",
+  BH: "Asia/Bahrain",
+  OM: "Asia/Muscat",
   YE: "Asia/Aden",
   // Asia
-  IN: "Asia/Kolkata",    PK: "Asia/Karachi",     BD: "Asia/Dhaka",
-  LK: "Asia/Colombo",    NP: "Asia/Kathmandu",   MM: "Asia/Rangoon",
-  TH: "Asia/Bangkok",    VN: "Asia/Ho_Chi_Minh", KH: "Asia/Phnom_Penh",
-  LA: "Asia/Vientiane",  MY: "Asia/Kuala_Lumpur", SG: "Asia/Singapore",
-  ID: "Asia/Jakarta",    PH: "Asia/Manila",
-  CN: "Asia/Shanghai",   HK: "Asia/Hong_Kong",   TW: "Asia/Taipei",
-  JP: "Asia/Tokyo",      KR: "Asia/Seoul",        MN: "Asia/Ulaanbaatar",
+  IN: "Asia/Kolkata",
+  PK: "Asia/Karachi",
+  BD: "Asia/Dhaka",
+  LK: "Asia/Colombo",
+  NP: "Asia/Kathmandu",
+  MM: "Asia/Rangoon",
+  TH: "Asia/Bangkok",
+  VN: "Asia/Ho_Chi_Minh",
+  KH: "Asia/Phnom_Penh",
+  LA: "Asia/Vientiane",
+  MY: "Asia/Kuala_Lumpur",
+  SG: "Asia/Singapore",
+  ID: "Asia/Jakarta",
+  PH: "Asia/Manila",
+  CN: "Asia/Shanghai",
+  HK: "Asia/Hong_Kong",
+  TW: "Asia/Taipei",
+  JP: "Asia/Tokyo",
+  KR: "Asia/Seoul",
+  MN: "Asia/Ulaanbaatar",
   // Americas
-  US: "America/New_York",  CA: "America/Toronto", MX: "America/Mexico_City",
-  GT: "America/Guatemala", HN: "America/Tegucigalpa", SV: "America/El_Salvador",
-  NI: "America/Managua",  CR: "America/Costa_Rica", PA: "America/Panama",
-  CU: "America/Havana",   DO: "America/Santo_Domingo", PR: "America/Puerto_Rico",
-  CO: "America/Bogota",   VE: "America/Caracas",  EC: "America/Guayaquil",
-  PE: "America/Lima",     BO: "America/La_Paz",   PY: "America/Asuncion",
-  AR: "America/Argentina/Buenos_Aires", UY: "America/Montevideo",
-  BR: "America/Sao_Paulo", CL: "America/Santiago",
+  US: "America/New_York",
+  CA: "America/Toronto",
+  MX: "America/Mexico_City",
+  GT: "America/Guatemala",
+  HN: "America/Tegucigalpa",
+  SV: "America/El_Salvador",
+  NI: "America/Managua",
+  CR: "America/Costa_Rica",
+  PA: "America/Panama",
+  CU: "America/Havana",
+  DO: "America/Santo_Domingo",
+  PR: "America/Puerto_Rico",
+  CO: "America/Bogota",
+  VE: "America/Caracas",
+  EC: "America/Guayaquil",
+  PE: "America/Lima",
+  BO: "America/La_Paz",
+  PY: "America/Asuncion",
+  AR: "America/Argentina/Buenos_Aires",
+  UY: "America/Montevideo",
+  BR: "America/Sao_Paulo",
+  CL: "America/Santiago",
   // Africa
-  EG: "Africa/Cairo",    LY: "Africa/Tripoli",   TN: "Africa/Tunis",
-  DZ: "Africa/Algiers",  MA: "Africa/Casablanca", SN: "Africa/Dakar",
-  GH: "Africa/Accra",    NG: "Africa/Lagos",      CM: "Africa/Douala",
-  KE: "Africa/Nairobi",  ET: "Africa/Addis_Ababa", TZ: "Africa/Dar_es_Salaam",
-  UG: "Africa/Kampala",  RW: "Africa/Kigali",     ZA: "Africa/Johannesburg",
+  EG: "Africa/Cairo",
+  LY: "Africa/Tripoli",
+  TN: "Africa/Tunis",
+  DZ: "Africa/Algiers",
+  MA: "Africa/Casablanca",
+  SN: "Africa/Dakar",
+  GH: "Africa/Accra",
+  NG: "Africa/Lagos",
+  CM: "Africa/Douala",
+  KE: "Africa/Nairobi",
+  ET: "Africa/Addis_Ababa",
+  TZ: "Africa/Dar_es_Salaam",
+  UG: "Africa/Kampala",
+  RW: "Africa/Kigali",
+  ZA: "Africa/Johannesburg",
   // Oceania
-  AU: "Australia/Sydney", NZ: "Pacific/Auckland",
+  AU: "Australia/Sydney",
+  NZ: "Pacific/Auckland",
 };
 
 const _tzCache = new Map();
@@ -1798,11 +2070,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.type !== "getTimezone") return false;
 
   const city = String(msg.city || "").trim();
-  const countryCode = String(msg.countryCode || "").trim().toUpperCase();
+  const countryCode = String(msg.countryCode || "")
+    .trim()
+    .toUpperCase();
 
   // No city — return country default timezone (for "Not specified" profiles)
   if (!city) {
-    const tz = countryCode ? (COUNTRY_DEFAULT_TZ[countryCode] || null) : null;
+    const tz = countryCode ? COUNTRY_DEFAULT_TZ[countryCode] || null : null;
     sendResponse({ timezone: tz });
     return true;
   }
@@ -1823,28 +2097,40 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       // Always pass countryCode when we have it — Open Meteo uses it as a hint
       if (countryCode) url.searchParams.set("countryCode", countryCode);
 
-      const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+      const resp = await fetch(url.toString(), {
+        headers: { Accept: "application/json" },
+      });
       if (resp.ok) {
         const data = await resp.json();
         const results = Array.isArray(data?.results) ? data.results : [];
 
         // Strict country filter first
         let candidates = countryCode
-          ? results.filter(r => String(r?.country_code || "").toUpperCase() === countryCode)
+          ? results.filter(
+              (r) =>
+                String(r?.country_code || "").toUpperCase() === countryCode,
+            )
           : results;
 
         // If strict filter gave nothing, retry without countryCode param
         if (!candidates.length && countryCode) {
-          const url2 = new URL("https://geocoding-api.open-meteo.com/v1/search");
+          const url2 = new URL(
+            "https://geocoding-api.open-meteo.com/v1/search",
+          );
           url2.searchParams.set("name", city);
           url2.searchParams.set("count", "10");
           url2.searchParams.set("language", "en");
           url2.searchParams.set("format", "json");
-          const resp2 = await fetch(url2.toString(), { headers: { Accept: "application/json" } });
+          const resp2 = await fetch(url2.toString(), {
+            headers: { Accept: "application/json" },
+          });
           if (resp2.ok) {
             const data2 = await resp2.json();
             const results2 = Array.isArray(data2?.results) ? data2.results : [];
-            candidates = results2.filter(r => String(r?.country_code || "").toUpperCase() === countryCode);
+            candidates = results2.filter(
+              (r) =>
+                String(r?.country_code || "").toUpperCase() === countryCode,
+            );
           }
         }
 
@@ -1859,11 +2145,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
 
       // Geocoding failed or no results — fall back to country default
-      const fallback = countryCode ? (COUNTRY_DEFAULT_TZ[countryCode] || null) : null;
+      const fallback = countryCode
+        ? COUNTRY_DEFAULT_TZ[countryCode] || null
+        : null;
       if (fallback) _tzCache.set(cacheKey, fallback);
       sendResponse({ timezone: fallback });
     } catch {
-      const fallback = countryCode ? (COUNTRY_DEFAULT_TZ[countryCode] || null) : null;
+      const fallback = countryCode
+        ? COUNTRY_DEFAULT_TZ[countryCode] || null
+        : null;
       sendResponse({ timezone: fallback });
     }
   })();

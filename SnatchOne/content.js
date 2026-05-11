@@ -7,6 +7,8 @@ let ahChatStop = !1,
 const PING_INTERVAL = 25e3;
 let AH_BRIDGE_READY = !1;
 window.addEventListener("message", (e) => {
+  // Принимаем только от текущего origin (alpha.date)
+  if (e.origin !== location.origin) return;
   const t = e.data;
   t && "SN_PAGE" === t.src && "SN_READY" === t.type && (AH_BRIDGE_READY = !0);
 });
@@ -88,6 +90,14 @@ function applySnatchTheme(hex) {
 }
 // Apply saved theme immediately
 applySnatchTheme(localStorage.getItem(SNATCH_THEME_KEY) || "#FF6B35");
+// ─── FONT SYSTEM ─────────────────────────────────────────────────────────────
+function initFontSystem() {
+  const notifySize = 10;
+  const extSize = 12;
+  document.documentElement.style.setProperty("--sn-notify-font-size", notifySize + "px");
+  document.documentElement.style.setProperty("--sn-ext-font-size", extSize + "px");
+}
+initFontSystem();
 // ─────────────────────────────────────────────────────────────────────────────
 // ─── PROFILE DOT HELPER ──────────────────────────────────────────────────────
 function getProfileDotClass(hasData, mode) {
@@ -121,6 +131,15 @@ async function sha1(e) {
   return [...new Uint8Array(n)]
     .map((e) => e.toString(16).padStart(2, "0"))
     .join("");
+}
+// SHA256 для хеширования лицензионных ключей (сервер использует SHA256/32)
+async function sha256key(e) {
+  const t = new TextEncoder().encode(e),
+    n = await crypto.subtle.digest("SHA-256", t);
+  return [...new Uint8Array(n)]
+    .map((e) => e.toString(16).padStart(2, "0"))
+    .join("")
+    .substring(0, 32);
 }
 let wsKeepPort = null;
 chrome.runtime.onConnect.addListener((e) => {
@@ -401,6 +420,8 @@ async function pageFetchJson(
   const i = "ah_" + Math.random().toString(36).slice(2),
     r = new Promise((e, t) => {
       const n = (o) => {
+        // Проверяем origin — ответ должен прийти только от текущей страницы
+        if (o.origin !== location.origin) return;
         const a = o.data;
         a &&
           "SN_PAGE" === a.src &&
@@ -793,7 +814,7 @@ function show(e) {
   ui.res.textContent = e;
 }
 function validateKey(e) {
-  const t = /^[A-Za-z0-9]{16}$/.test(e.value);
+  const t = /^[A-Za-z0-9]{32}$/.test(e.value);
   ((e.style.borderColor = t ? "#ccc" : "#f33"), (ui.ok.disabled = !t));
 }
 function fmtExp(e) {
@@ -914,7 +935,7 @@ function showLicenseForm(modal) {
 
   const keyInp = elt("input", {
     id: "ah-key", autocomplete: "off",
-    placeholder: "Введите ключ (16 символов)", maxlength: 16,
+    placeholder: "Введите ключ (32 символа)", maxlength: 32,
     style: [
       "flex:1;padding:16px 20px;border:2px solid transparent;",
       "border-right:none;border-radius:14px 0 0 14px;",
@@ -923,7 +944,7 @@ function showLicenseForm(modal) {
       "background:#fff;color:#1a1a2e;outline:none;transition:border-color .2s;"
     ].join(""),
     oninput: (e) => {
-      e.target.value = e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+      e.target.value = e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 32);
       validateKey(e.target);
     },
   });
@@ -963,7 +984,7 @@ function showLicenseForm(modal) {
 async function sendCmd() {
   ((ui.ok.disabled = !0), show("…подождите…"));
   const e = ui.key.value.trim(),
-    t = (await sha1(e)).slice(0, 16),
+    t = await sha256key(e),
     n = Promise.race([
       chrome.runtime.sendMessage({
         cmd: "postHelper",
@@ -1211,7 +1232,7 @@ function selectTab(e) {
 
     const subMsg = elt("div", {
       style: "font-size:13px;color:#b2bec3;text-align:center;max-width:360px;line-height:1.5;margin-top:-6px;"
-    }, "16 символов — получить ключ в Telegram");
+    }, "32 символа — получить ключ в Telegram");
 
     // Поле ввода + кнопка
     const keyWrap = elt("div", {
@@ -1225,8 +1246,8 @@ function selectTab(e) {
     const keyInp = elt("input", {
       id: "ah-inline-key",
       autocomplete: "off",
-      placeholder: "XXXXXXXXXXXXXXXX",
-      maxlength: 16,
+      placeholder: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+      maxlength: 32,
       style: [
         "flex:1;padding:14px 18px;border:2px solid #e0e0e0;",
         "border-right:none;border-radius:14px 0 0 14px;",
@@ -1236,7 +1257,7 @@ function selectTab(e) {
       ].join(""),
     });
 
-    // Кнопка: по умолчанию TG, при вводе 16 символов — "Проверить ключ"
+    // Кнопка: по умолчанию TG, при вводе 32 символов — "Проверить ключ"
     const actionBtn = elt("a", {
       id: "ah-inline-action",
       href: "https://t.me/brachka_rass",
@@ -1263,11 +1284,11 @@ function selectTab(e) {
 
     // Логика переключения кнопки при вводе
     keyInp.addEventListener("input", () => {
-      const val = keyInp.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 16);
+      const val = keyInp.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 32);
       keyInp.value = val;
       inlineRes.textContent = "";
 
-      if (val.length === 16) {
+      if (val.length === 32) {
         // Режим "Проверить ключ"
         actionBtn.removeAttribute("href");
         actionBtn.removeAttribute("target");
@@ -1289,16 +1310,16 @@ function selectTab(e) {
     });
 
     keyInp.addEventListener("focus", () => {
-      if (keyInp.value.length !== 16) keyInp.style.borderColor = "#0088cc";
+      if (keyInp.value.length !== 32) keyInp.style.borderColor = "#0088cc";
     });
     keyInp.addEventListener("blur", () => {
-      if (keyInp.value.length !== 16 && keyInp.value.length > 0) keyInp.style.borderColor = "#f39c12";
+      if (keyInp.value.length !== 32 && keyInp.value.length > 0) keyInp.style.borderColor = "#f39c12";
       else if (keyInp.value.length === 0) keyInp.style.borderColor = "#e0e0e0";
     });
 
     // Клик по кнопке "Проверить ключ"
     actionBtn.addEventListener("click", async (ev) => {
-      if (keyInp.value.length !== 16) return; // TG-режим — ссылка сработает сама
+      if (keyInp.value.length !== 32) return; // TG-режим — ссылка сработает сама
       ev.preventDefault();
 
       actionBtn.style.opacity = "0.7";
@@ -1310,7 +1331,7 @@ function selectTab(e) {
 
       try {
         const rawKey = keyInp.value.trim();
-        const hashedKey = (await sha1(rawKey)).slice(0, 16);
+        const hashedKey = await sha256key(rawKey);
 
         const res = await Promise.race([
           chrome.runtime.sendMessage({
@@ -3725,11 +3746,11 @@ function renderTools(e) {
   const limCard = elt("div", { className: "ah-card", style: "margin-top:12px;" });
   limCard.append(elt("div", {
     style: [
-      "font-size:10px;font-weight:700;letter-spacing:1.2px;",
-      "text-transform:uppercase;color:#c0c4cc;margin-bottom:14px;",
-      "font-family:'Inter',system-ui,sans-serif;",
+      "font-size:11px;font-weight:800;letter-spacing:1px;",
+      "text-transform:uppercase;color:var(--sa, #ff6b35);margin-bottom:16px;",
+      "font-family:'Inter',system-ui,sans-serif;display:flex;align-items:center;gap:8px;",
     ].join("")
-  }, "Индикаторы лимитов чата"));
+  }, elt("span", { style: "font-size:16px;" }, "📊"), "Индикаторы лимитов"));
 
   const LK = "telescopeSettings";
 
@@ -3738,7 +3759,11 @@ function renderTools(e) {
     chrome.storage.local.get([LK], r => {
       const s = Object.assign({}, r[LK] || {});
       s[key] = val;
-      chrome.storage.local.set({ [LK]: s }, cb);
+      chrome.storage.local.set({ [LK]: s }, () => {
+        // Синхронизируем с localStorage для доступа из модулей (page context)
+        try { localStorage.setItem("snatch_" + key, val); } catch(e) {}
+        if (cb) cb();
+      });
     });
   }
   function limGet(key, def, cb) {
@@ -3746,24 +3771,23 @@ function renderTools(e) {
   }
 
   // ── РЕЖИМ (3 кнопки: Выкл / Цифры / Цифры+Цвет) ──────────────────
-  const limModeRow = elt("div", { style: "margin-bottom:14px;" });
-  limModeRow.append(elt("div", { style: "font-size:10px;color:#c0c4cc;margin-bottom:8px;font-weight:700;letter-spacing:1px;font-family:'Inter',system-ui,sans-serif;text-transform:uppercase;" }, "Режим отображения"));
-  const modeWrap = elt("div", { style: "display:flex;gap:6px;" });
+  const limModeRow = elt("div", { style: "margin-bottom:20px;background:#f8fafc;padding:12px;border-radius:12px;border:1px solid #f1f5f9;" });
+  limModeRow.append(elt("div", { style: "font-size:11px;color:#64748b;margin-bottom:10px;font-weight:700;letter-spacing:0.5px;font-family:'Inter',system-ui,sans-serif;text-transform:uppercase;" }, "Режим отображения"));
+  const modeWrap = elt("div", { style: "display:flex;gap:4px;background:#e2e8f0;padding:2px;border-radius:10px;" });
 
   const MODES = [
-    { key: "off",   label: "Выкл",         title: "Убрать всё, вернуть оригинальные иконки" },
-    { key: "nums",  label: "Цифры",        title: "Только цифры, без цвета" },
-    { key: "color", label: "Цифры + Цвет", title: "Цифры с цветом по порогам (по умолчанию)" },
+    { key: "off",   label: "Выкл",         title: "Оригинал" },
+    { key: "nums",  label: "Цифры",        title: "Только текст" },
+    { key: "color", label: "Цвет + Цифры", title: "Цветной текст" },
   ];
 
   function setModeUI(active) {
     modeWrap.querySelectorAll(".lim-mode-btn").forEach(b => {
       const on = b.dataset.mode === active;
-      b.style.background = on ? "var(--sa, #ff6b35)" : "#f1f2f6";
-      b.style.color = on ? "#fff" : "#2d3436";
-      b.style.borderColor = on ? "var(--sa, #ff6b35)" : "#dfe6e9";
+      b.style.background = on ? "#fff" : "transparent";
+      b.style.color = on ? "#0f172a" : "#64748b";
+      b.style.boxShadow = on ? "0 2px 4px rgba(0,0,0,0.05)" : "none";
     });
-    // show/hide threshold & color sections
     const showThresh = active === "color";
     threshSection.style.display = showThresh ? "" : "none";
     colorSection.style.display = showThresh ? "" : "none";
@@ -3774,13 +3798,11 @@ function renderTools(e) {
     btn.className = "lim-mode-btn";
     btn.dataset.mode = m.key;
     btn.textContent = m.label;
-    btn.title = m.title;
     btn.style.cssText = [
-      "flex:1;padding:7px 4px;border-radius:8px;",
-      "border:1px solid #e8e8e8;font-size:12px;font-weight:600;",
-      "cursor:pointer;transition:all .15s;",
-      "background:#f7f7f7;color:#636e72;",
-      "font-family:'Inter',system-ui,sans-serif;letter-spacing:-.1px;",
+      "flex:1;padding:6px 2px;border-radius:8px;",
+      "border:none;font-size:11px;font-weight:700;",
+      "cursor:pointer;transition:all .2s;",
+      "font-family:'Inter',system-ui,sans-serif;",
     ].join("");
     btn.addEventListener("click", () => { limSave("limMode", m.key); setModeUI(m.key); });
     modeWrap.append(btn);
@@ -3789,33 +3811,29 @@ function renderTools(e) {
   limCard.append(limModeRow);
 
   // ── ЦВЕТА (3 пары: красный / жёлтый / зелёный) ─────────────────────
-  const colorSection = elt("div", { style: "margin-bottom:14px;" });
-  colorSection.append(elt("div", { style: "font-size:10px;color:#c0c4cc;margin-bottom:8px;font-weight:700;letter-spacing:1px;font-family:'Inter',system-ui,sans-serif;text-transform:uppercase;" }, "Цвета"));
+  const colorSection = elt("div", { style: "margin-bottom:20px;" });
+  colorSection.append(elt("div", { style: "font-size:11px;color:#64748b;margin-bottom:12px;font-weight:700;letter-spacing:0.5px;font-family:'Inter',system-ui,sans-serif;text-transform:uppercase;" }, "Настройка цветов"));
 
-  const DEFAULT_COLORS = { red: "#ff6b6b", yellow: "#ffc947", green: "#26de81" };
   const colorKeys = [
-    { key: "colRed",    label: "🔴 Красный", def: "#ff6b6b" },
-    { key: "colYellow", label: "🟡 Жёлтый",  def: "#ffc947" },
-    { key: "colGreen",  label: "🟢 Зелёный", def: "#26de81" },
+    { key: "colRed",    label: "Критично", def: "#ff6b6b" },
+    { key: "colYellow", label: "Средне",   def: "#ffc947" },
+    { key: "colGreen",  label: "Норма",    def: "#26de81" },
   ];
 
-  const colorGrid = elt("div", { style: "display:flex;gap:8px;" });
+  const colorGrid = elt("div", { style: "display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;" });
   colorKeys.forEach(({ key, label, def }) => {
-    const g = elt("div", { style: "flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;" });
-    g.append(elt("span", { style: "font-size:11px;color:#636e72;text-align:center;" }, label));
+    const g = elt("div", { style: "display:flex;flex-direction:column;gap:6px;background:#f8fafc;padding:10px;border-radius:10px;border:1px solid #f1f5f9;align-items:center;" });
     const picker = elt("input", { type: "color" });
     picker.value = def;
-    picker.style.cssText = "width:100%;height:32px;border:1px solid #dfe6e9;border-radius:8px;cursor:pointer;padding:2px;background:#fff;";
+    picker.style.cssText = "width:36px;height:36px;border:none;border-radius:50%;cursor:pointer;background:none;padding:0;overflow:hidden;";
     limGet(key, def, v => { picker.value = v; });
     picker.addEventListener("input", () => limSave(key, picker.value));
     picker.addEventListener("change", () => limSave(key, picker.value, refreshAllBars));
-    // Reset button
-    const rst = elt("button");
-    rst.textContent = "↺";
-    rst.title = "Сбросить";
-    rst.style.cssText = "font-size:11px;background:none;border:none;cursor:pointer;color:#b2bec3;padding:0;";
-    rst.addEventListener("click", () => { picker.value = def; limSave(key, def, refreshAllBars); });
-    g.append(picker, rst);
+    
+    g.append(
+      picker,
+      elt("span", { style: "font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;" }, label)
+    );
     colorGrid.append(g);
   });
   colorSection.append(colorGrid);
@@ -3952,6 +3970,20 @@ function renderTools(e) {
       })
     );
 
+  const AH_SET = "ahSet";
+  const mkAhSwitch = (label, key, def = true) =>
+    mkToggleRow(label,
+      cb => chrome.storage.local.get([AH_SET], r => {
+        const v = (r[AH_SET] || {})[key];
+        cb(v !== undefined ? v : def);
+      }),
+      v  => chrome.storage.local.get([AH_SET], r => {
+        const s = Object.assign({}, r[AH_SET] || {});
+        s[key] = v;
+        chrome.storage.local.set({ [AH_SET]: s });
+      })
+    );
+
   container.append(mkCard("Snatch Функции",
     mkAhtSwitch("Chat Credits",           s => !!(s.modules||{}).chatCredits,        (s,v) => { s.modules=Object.assign({},s.modules||{}); s.modules.chatCredits=v; }),
     mkAhtSwitch("Local Time",             s => !!(s.modules||{}).localTime,          (s,v) => { s.modules=Object.assign({},s.modules||{}); s.modules.localTime=v; }),
@@ -3959,6 +3991,7 @@ function renderTools(e) {
     mkAhtSwitch("Бейдж Personal (P)",     s => !!(s.features||{}).personalBadge,     (s,v) => { s.features=Object.assign({},s.features||{}); s.features.personalBadge=v; }),
     mkAhtSwitch("Таймер Personal",        s => !!(s.features||{}).personalTimer,     (s,v) => { s.features=Object.assign({},s.features||{}); s.features.personalTimer=v; }),
     mkAhtSwitch("Подсветка лимита 10-2",  s => !!(s.features||{}).chatLimitHighlight,(s,v) => { s.features=Object.assign({},s.features||{}); s.features.chatLimitHighlight=v; }),
+    mkAhSwitch("Водяной знак",            "watermarkEnabled"),
   ));
 
   container.append(limCard);
@@ -6527,7 +6560,7 @@ function renderSettings(container) {
         "align-items:flex-start;gap:10px;margin-bottom:2px;}" +
         "#sn-content-earnings .sne-earn__title{min-width:0;flex:1;}" +
         "#sn-content-earnings #sne-total{font-variant-numeric:tabular-nums;font-weight:600;" +
-        "font-size:22px;line-height:1.15;letter-spacing:-.03em;color:#0a0a0a;}" +
+        "font-size:20px;line-height:1.15;letter-spacing:-.03em;color:#0a0a0a;}" +
         "#sn-content-earnings #sne-date{margin-top:4px;font-size:11px;color:#737373;" +
         "letter-spacing:.04em;}" +
         "#sn-content-earnings .sne-earn__actions{display:flex;gap:2px;flex-shrink:0;" +
@@ -6547,9 +6580,9 @@ function renderSettings(container) {
         "#sn-content-earnings #sne-rows:focus{border-color:#a3a3a3;}" +
         "#sn-content-earnings #sne-stats-wrap{margin-top:2px;}" +
         "#sn-content-earnings .sne-earn__statrow{display:flex;gap:10px;align-items:baseline;" +
-        "padding:7px 2px;border-bottom:1px solid #f0f0f0;font-size:12px;line-height:1.35;}" +
+        "padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:12px;line-height:1.35;}" +
         "#sn-content-earnings .sne-earn__statrow:last-child{border-bottom:none;padding-bottom:0;}" +
-        "#sn-content-earnings .sne-earn__stat-amt{min-width:52px;text-align:right;" +
+        "#sn-content-earnings .sne-earn__stat-amt{min-width:60px;text-align:left;" +
         "font-variant-numeric:tabular-nums;font-weight:600;font-size:12px;color:#047857;}" +
         "#sn-content-earnings .sne-earn__stat-lbl{flex:1;color:#404040;}" +
         "#sn-content-earnings .sne-earn__hist{margin-top:10px;padding-top:10px;" +
@@ -6557,9 +6590,9 @@ function renderSettings(container) {
         "#sn-content-earnings .sne-earn__histcap{font-size:10px;font-weight:600;" +
         "letter-spacing:.12em;text-transform:uppercase;color:#a3a3a3;margin:0 0 8px;}" +
         "#sn-content-earnings .sne-earn__histrow{display:flex;justify-content:space-between;" +
-        "align-items:baseline;gap:8px;padding:5px 2px;font-size:12px;}" +
+        "align-items:baseline;gap:8px;padding:2px 0;font-size:12px;}" +
         "#sn-content-earnings .sne-earn__hist-amt{font-variant-numeric:tabular-nums;" +
-        "font-weight:600;color:#059669;flex-shrink:0;}" +
+        "font-weight:600;color:#059669;flex-shrink:0;min-width:48px;}" +
         "#sn-content-earnings .sne-earn__hist-mid{display:flex;gap:6px;align-items:baseline;" +
         "min-width:0;flex:1;}" +
         "#sn-content-earnings .sne-earn__hist-lbl{color:#525252;white-space:nowrap;" +
@@ -6863,15 +6896,26 @@ function renderSettings(container) {
                 amount: difference,
                 label: EARNINGS_LABELS[key] || key,
                 time: timeString,
-                id: Date.now() + Math.random(),
+                id: Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-' + key,
               });
             }
           });
 
           if (newHistoryItems.length) {
-            this.history = newHistoryItems.concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
-            this.persistHistory();
-            this.renderHistory();
+            // Фильтруем дубликаты по содержимому (amount + label + time)
+            const uniqueNewItems = newHistoryItems.filter(newItem => {
+              return !this.history.some(existingItem => 
+                existingItem.amount === newItem.amount &&
+                existingItem.label === newItem.label &&
+                existingItem.time === newItem.time
+              );
+            });
+            
+            if (uniqueNewItems.length > 0) {
+              this.history = uniqueNewItems.concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
+              this.persistHistory();
+              this.renderHistory();
+            }
           }
 
           if (
@@ -6881,16 +6925,26 @@ function renderSettings(container) {
           ) {
             const diff = currentTotal - parseFloat(prevStats.total);
             this.showDiffBadge(diff, null);
-            this.history = [
-              {
-                amount: diff,
-                label: "Разное",
-                time: timeString,
-                id: Date.now(),
-              },
-            ].concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
-            this.persistHistory();
-            this.renderHistory();
+            
+            const newItem = {
+              amount: diff,
+              label: "Разное",
+              time: timeString,
+              id: Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-misc',
+            };
+            
+            // Проверяем дубликат по содержимому
+            const isDuplicate = this.history.some(existingItem =>
+              existingItem.amount === newItem.amount &&
+              existingItem.label === newItem.label &&
+              existingItem.time === newItem.time
+            );
+            
+            if (!isDuplicate) {
+              this.history = [newItem].concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
+              this.persistHistory();
+              this.renderHistory();
+            }
           }
         }
 
