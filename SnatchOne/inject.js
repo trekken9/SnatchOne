@@ -35162,7 +35162,7 @@ styleSheet.flush()
         title: inStop ? "Убрать из стоп-листа" : "Добавить в стоп-лист",
         style: {
           padding: "3px 8px",
-          background: inStop 
+          background: inStop
             ? (isHovered ? "linear-gradient(135deg, #10b981, #059669)" : "linear-gradient(135deg, #34d399, #10b981)")
             : (isHovered ? "linear-gradient(135deg, #f43f5e, #dc2626)" : "linear-gradient(135deg, #fb7185, #f43f5e)"),
           color: "#fff",
@@ -35178,8 +35178,8 @@ styleSheet.flush()
           alignItems: "center",
           justifyContent: "center",
           gap: "3px",
-          boxShadow: isHovered 
-            ? "0 2px 6px rgba(0,0,0,0.2)" 
+          boxShadow: isHovered
+            ? "0 2px 6px rgba(0,0,0,0.2)"
             : "0 1px 3px rgba(0,0,0,0.1)",
           transform: isHovered ? "translateY(-1px)" : "translateY(0)",
         },
@@ -35326,7 +35326,7 @@ styleSheet.flush()
         }
 
         const balanceNum = balance != null ? parseFloat(balance) : 0;
-        
+
         let amountColor, glowColor;
         if (balanceNum >= 3000) {
           // От $3000+ - зеленый (VIP)
@@ -38198,22 +38198,28 @@ styleSheet.flush()
         if (!pinnedWrapperRef.current) {
           const wrapper = document.createElement("div");
           wrapper.className = "ah-pinned-wrapper";
+          wrapper.style.width = "100%";
+          wrapper.style.marginBottom = "8px"; // add some spacing
           pinnedWrapperRef.current = wrapper;
         }
         const wrapper = pinnedWrapperRef.current;
 
-        if (containerElement.firstChild !== wrapper) {
-          containerElement.insertBefore(wrapper, containerElement.firstChild || null);
+        const parent = containerElement.parentNode;
+        if (!parent) return;
+
+        if (wrapper.parentNode !== parent || wrapper.nextSibling !== containerElement) {
+          parent.insertBefore(wrapper, containerElement);
         }
 
         const observer = new MutationObserver(() => {
-          if (!containerElement.contains(wrapper)) {
-            containerElement.insertBefore(wrapper, containerElement.firstChild || null);
-          } else if (containerElement.firstChild !== wrapper) {
-            containerElement.insertBefore(wrapper, containerElement.firstChild);
+          if (wrapper.parentNode !== parent || wrapper.nextSibling !== containerElement) {
+            parent.insertBefore(wrapper, containerElement);
           }
         });
-        observer.observe(containerElement, { childList: true });
+
+        // Наблюдаем за родителем, так как теперь мы вставляем перед контейнером
+        observer.observe(parent, { childList: true });
+
         return () => {
           observer.disconnect();
         };
@@ -38949,14 +38955,11 @@ styleSheet.flush()
         : msgNode.querySelector('[data-testid="message-text"]');
       if (!messageTextDiv) return;
 
-      // Берём span с текстом или весь div
-      const spans = messageTextDiv.querySelectorAll("span");
-      const textEl = spans.length > 0
-        ? Array.from(spans).find(s => s.textContent.trim().length > 1) || messageTextDiv
-        : messageTextDiv;
-      if (!textEl) return;
-
-      const origText = textEl.textContent.trim();
+      // Берём текст сообщения, сохраняя переносы строк
+      let origText = messageTextDiv.innerText;
+      if (!origText) origText = messageTextDiv.textContent;
+      origText = origText?.trim() || "";
+      if (origText.length < 2) return;
       if (!origText || origText.length < 2) return;
 
       msgNode.dataset.ahTranslated = "1";
@@ -39078,6 +39081,7 @@ styleSheet.flush()
         "color:#636e72",
         "line-height:1.5",
         "font-style:italic",
+        "white-space:pre-wrap"
       ].join(";");
       block.textContent = translated;
 
@@ -39129,7 +39133,9 @@ styleSheet.flush()
       for (const textDiv of textNodes) {
         if (seen.has(textDiv) || textDiv.dataset.ahLetterTranslated === "1") continue;
         seen.add(textDiv);
-        const origText = textDiv.textContent.trim();
+        let origText = textDiv.innerText;
+        if (!origText) origText = textDiv.textContent;
+        origText = origText?.trim() || "";
         if (!origText || origText.length < 5) continue;
 
         if (mode === "auto") {
@@ -39140,7 +39146,7 @@ styleSheet.flush()
           textDiv.querySelector(".ah-letter-translation")?.remove();
           const block = document.createElement("div");
           block.className = "ah-letter-translation";
-          block.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.04);font-size:13px;color:#636e72;line-height:1.5;font-style:italic;border-left:3px solid rgba(var(--sa-rgb,255,107,53),0.4);";
+          block.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.04);font-size:13px;color:#636e72;line-height:1.5;font-style:italic;border-left:3px solid rgba(var(--sa-rgb,255,107,53),0.4);white-space:pre-wrap;";
           block.textContent = translated;
           textDiv.appendChild(block);
         } else {
@@ -39173,7 +39179,7 @@ styleSheet.flush()
             textDiv.querySelector(".ah-letter-translation")?.remove();
             const block = document.createElement("div");
             block.className = "ah-letter-translation";
-            block.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.04);font-size:13px;color:#636e72;line-height:1.5;font-style:italic;border-left:3px solid rgba(var(--sa-rgb,255,107,53),0.4);";
+            block.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.04);font-size:13px;color:#636e72;line-height:1.5;font-style:italic;border-left:3px solid rgba(var(--sa-rgb,255,107,53),0.4);white-space:pre-wrap;";
             block.textContent = translated;
             textDiv.appendChild(block);
             btn.innerHTML = "&#128064;"; btn.title = "Скрыть перевод";
@@ -39422,10 +39428,15 @@ styleSheet.flush()
       document.head.appendChild(hideStyle);
     }
 
-    // Принудительно сбрасываем скрытое состояние при загрузке (чтобы выйти из вечного зависания)
-    localStorage.setItem("ah_ui_hidden", "0");
-    document.body.classList.remove("ah-ui-hidden");
-    window.SNATCH_HIDDEN_STATE = false;
+    // Восстанавливаем скрытое состояние при загрузке
+    const isUiHidden = localStorage.getItem("ah_ui_hidden") === "1";
+    if (isUiHidden) {
+      document.body.classList.add("ah-ui-hidden");
+      window.SNATCH_HIDDEN_STATE = true;
+    } else {
+      document.body.classList.remove("ah-ui-hidden");
+      window.SNATCH_HIDDEN_STATE = false;
+    }
 
     const _keyboardToggle = setupKeyboardToggle();
 

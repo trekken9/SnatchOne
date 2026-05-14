@@ -1,108 +1,108 @@
-    {
-      style:
-        "background: #f8f9fa; padding: 15px; border-radius: 12px; border: 1px solid #dfe6e9;",
+{
+  style:
+  "background: #f8f9fa; padding: 15px; border-radius: 12px; border: 1px solid #dfe6e9;",
     },
-    elt(
-      "div",
-      {
-        style:
-          "font-size: 12px; color: #636e72; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;",
-      },
-      "Оператор",
-    ),
-    elt(
-      "div",
-      { style: "font-size: 24px; font-weight: bold; color: #0984e3;" },
-      `ID: ${opId}`,
-    ),
+elt(
+  "div",
+  {
+    style:
+      "font-size: 12px; color: #636e72; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;",
+  },
+  "Оператор",
+),
+  elt(
+    "div",
+    { style: "font-size: 24px; font-weight: bold; color: #0984e3;" },
+    `ID: ${opId}`,
+  ),
   );
 
-  // Блок 2: Лицензия
-  let licenseColor = "var(--sa)"; // Зеленый
-  let licenseText = "Активна";
+// Блок 2: Лицензия
+let licenseColor = "var(--sa)"; // Зеленый
+let licenseText = "Активна";
 
-  if (expSec <= 0) {
-    licenseColor = "#d63031"; // Красный
-    licenseText = "Истекла / Неактивна";
-  } else if (expSec < 86400) {
-    licenseColor = "#e17055"; // Оранжевый (меньше дня)
-  }
+if (expSec <= 0) {
+  licenseColor = "#d63031"; // Красный
+  licenseText = "Истекла / Неактивна";
+} else if (expSec < 86400) {
+  licenseColor = "#e17055"; // Оранжевый (меньше дня)
+}
 
-  const licenseBox = elt(
+const licenseBox = elt(
+  "div",
+  {
+    style:
+      "background: #f8f9fa; padding: 15px; border-radius: 12px; border: 1px solid #dfe6e9;",
+  },
+  elt(
     "div",
     {
       style:
-        "background: #f8f9fa; padding: 15px; border-radius: 12px; border: 1px solid #dfe6e9;",
+        "font-size: 12px; color: #636e72; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;",
     },
-    elt(
-      "div",
-      {
-        style:
-          "font-size: 12px; color: #636e72; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600;",
-      },
-      "Лицензия",
-    ),
-    elt(
-      "div",
-      {
-        style: `font-size: 18px; font-weight: 600; color: ${licenseColor}; margin-bottom: 5px;`,
-      },
-      licenseText,
-    ),
-    elt(
-      "div",
-      { style: "font-size: 14px; color: #2d3436;" },
-      expSec > 0 ? `Осталось: ${fmtExp(expSec)}` : "Требуется продление",
-    ),
-  );
-
-  // Блок 3: Система (Версия и ключ)
-  const systemBox = elt(
+    "Лицензия",
+  ),
+  elt(
     "div",
     {
-      style: "margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px;",
+      style: `font-size: 18px; font-weight: 600; color: ${licenseColor}; margin-bottom: 5px;`,
     },
+    licenseText,
+  ),
+  elt(
+    "div",
+    { style: "font-size: 14px; color: #2d3436;" },
+    expSec > 0 ? `Осталось: ${fmtExp(expSec)}` : "Требуется продление",
+  ),
+);
+
+// Блок 3: Система (Версия и ключ)
+const systemBox = elt(
+  "div",
+  {
+    style: "margin-top: 10px; border-top: 1px solid #eee; padding-top: 15px;",
+  },
+  elt(
+    "div",
+    { style: "font-size: 13px; margin-bottom: 5px;" },
     elt(
-      "div",
-      { style: "font-size: 13px; margin-bottom: 5px;" },
-      elt(
-        "span",
-        { style: "color: #636e72; font-weight: 500;" },
-        "Версия бота: ",
-      ),
-      elt(
-        "span",
-        { style: "color: #2d3436;" },
-        chrome.runtime.getManifest().version,
-      ),
+      "span",
+      { style: "color: #636e72; font-weight: 500;" },
+      "Версия бота: ",
     ),
     elt(
-      "div",
-      { style: "font-size: 13px;" },
-      elt(
-        "span",
-        { style: "color: #636e72; font-weight: 500;" },
-        "Ключ (hash): ",
-      ),
-      elt(
-        "span",
-        {
-          style:
-            "font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px;",
-        },
-        authKey.slice(0, 8) + "...",
-      ),
+      "span",
+      { style: "color: #2d3436;" },
+      chrome.runtime.getManifest().version,
     ),
-  );
+  ),
+  elt(
+    "div",
+    { style: "font-size: 13px;" },
+    elt(
+      "span",
+      { style: "color: #636e72; font-weight: 500;" },
+      "Ключ (hash): ",
+    ),
+    elt(
+      "span",
+      {
+        style:
+          "font-family: monospace; background: #eee; padding: 2px 6px; border-radius: 4px;",
+      },
+      authKey.slice(0, 8) + "...",
+    ),
+  ),
+);
 
-  container.append(
-    elt("h3", { style: "margin: 0 0 10px; font-size: 20px;" }, "ℹ️ Информация"),
-    operatorBox,
-    licenseBox,
-    systemBox,
-  );
+container.append(
+  elt("h3", { style: "margin: 0 0 10px; font-size: 20px;" }, "ℹ️ Информация"),
+  operatorBox,
+  licenseBox,
+  systemBox,
+);
 
-  e.append(container);
+e.append(container);
 }
 function renderStats(e) {
   e.innerHTML = "";
@@ -225,7 +225,7 @@ function renderStopList(e) {
   // Поле ввода
   const textArea = elt("textarea", {
     id: "ah-stop-input",
-    placeholder: "12345678\n87654321",
+    placeholder: "Тут впиши ID клиента",
     value: loadStop(),
     spellcheck: false,
   });
@@ -605,26 +605,26 @@ function renderInvites(e) {
     if (INV_DRAFT.img) {
       const isVid = INV_DRAFT.img.type === "video" || INV_DRAFT.img.type === "videos";
       const thumbSrc = isVid ? (INV_DRAFT.img.thumb_link || INV_DRAFT.img.thumb || INV_DRAFT.img.url) : makeThumb(INV_DRAFT.img.url);
-      
+
       const thumbContainer = elt("div", {
         style: "position:relative;display:inline-block;width:24px;height:24px;"
       });
-      
+
       const thumb = elt("img", {
         src: thumbSrc,
         style: "width:100%;height:100%;border-radius:4px;object-fit:cover;",
         loading: "lazy"
       });
-      thumb.onerror = function() { this.style.display = "none"; };
+      thumb.onerror = function () { this.style.display = "none"; };
       thumbContainer.append(thumb);
-      
+
       // Добавляем иконку play для видео
       if (isVid) {
         thumbContainer.append(elt("div", {
           style: "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);pointer-events:none;font-size:10px;color:#fff;border-radius:4px;"
         }, "▶"));
       }
-      
+
       const del = elt(
         "span",
         {
@@ -793,17 +793,17 @@ function renderInvites(e) {
         if (img) {
           const isVid = img.type === "video" || img.type === "videos";
           const thumbSrc = isVid ? (img.thumb_link || img.thumb || img.url) : makeThumb(img.url);
-          const imgEl = elt("img", { 
-            className: "item-thumb", 
+          const imgEl = elt("img", {
+            className: "item-thumb",
             src: thumbSrc,
             loading: "lazy",
             style: "cursor:pointer;"
           });
           // Обработка битых картинок
-          imgEl.onerror = function() {
+          imgEl.onerror = function () {
             this.style.display = "none";
           };
-          
+
           // Клик для открытия в полный размер
           imgEl.onclick = () => {
             openLightbox({
@@ -813,20 +813,20 @@ function renderInvites(e) {
               type: isVid ? "videos" : "images"
             });
           };
-          
+
           // Оборачиваем в контейнер для добавления иконки play
           const thumbContainer = elt("div", {
             style: "position:relative;display:inline-block;cursor:pointer;vertical-align:top;line-height:0;"
           });
           thumbContainer.append(imgEl);
-          
+
           // Добавляем иконку play для видео
           if (isVid) {
             thumbContainer.append(elt("div", {
               style: "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);pointer-events:none;font-size:18px;color:#fff;"
             }, "▶"));
           }
-          
+
           row.append(thumbContainer);
         }
 
@@ -995,6 +995,6 @@ function setStatus(e) {
   const t = document.getElementById("ah-status");
   t &&
     ((t.textContent = e ? "Бот запущен" : "Бот остановлен"),
-    (t.style.color = e ? "#4caf50" : "#d32f2f"));
+      (t.style.color = e ? "#4caf50" : "#d32f2f"));
 }
 async function toggleStart() {

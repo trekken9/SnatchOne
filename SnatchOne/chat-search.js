@@ -308,7 +308,7 @@
   }
 
   function escHtml(s) {
-    return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
   function tsDate(obj) {
@@ -319,7 +319,7 @@
 
   async function loadChatData(chatId, progressCallback) {
     if (isLoading) return;
-    
+
     isLoading = true;
     allMessages = [];
     currentChatId = chatId;
@@ -337,7 +337,7 @@
     const pageFetchJson = async (url, options) => {
       const id = "cs_" + Math.random().toString(36).slice(2);
       const timeout = options.timeout || 8000;
-      
+
       const promise = new Promise((resolve, reject) => {
         const handler = (e) => {
           const data = e.data;
@@ -353,7 +353,7 @@
             }
           }
         };
-        
+
         window.addEventListener("message", handler);
         setTimeout(() => {
           window.removeEventListener("message", handler);
@@ -423,12 +423,12 @@
             }
           }
         }
-        
+
         // Обновляем прогресс
         if (progressCallback) {
           progressCallback({ type: 'chat', count: allMessages.length });
         }
-        
+
         if (!hasData) break;
       }
 
@@ -456,7 +456,7 @@
                 allEntries.push(...(res.value.json.response?.mails || []));
               }
             }
-            
+
             // Обновляем прогресс
             if (progressCallback) {
               progressCallback({ type: 'letters', count: allEntries.length });
@@ -480,23 +480,23 @@
 
             const ts = tsDate(mail);
             const text = (mail.message_content || "").trim();
-            
+
             // Определяем отправителя по sender_external_id или sender_id
             const senderId = mail.sender_external_id || mail.sender_id;
             const recipientId = mail.recipient_external_id || mail.recipient_id;
-            
+
             // isMe = true если письмо от девушки (womanId)
             const isMe = senderId === womanId;
-            
+
             const sName = (mail.sender_name || "").trim();
             const authorName = isMe ? womanName : manName;
-            
+
             console.log('[Chat Search] Letter from:', sName, 'senderId:', senderId, 'isMe:', isMe);
 
             // Ищем медиа в разных полях
             let mediaUrl = null;
             let mediaType = null;
-            
+
             // Проверяем все возможные поля для фото
             const photoFields = ['photo_link', 'photo_url', 'image_url', 'photo', 'image', 'photoLink', 'imageUrl'];
             for (const field of photoFields) {
@@ -507,7 +507,7 @@
                 break;
               }
             }
-            
+
             // Проверяем поля для видео
             if (!mediaUrl) {
               const videoFields = ['video_link', 'video_url', 'video', 'videoLink', 'videoUrl'];
@@ -520,7 +520,7 @@
                 }
               }
             }
-            
+
             // Проверяем общие поля для вложений
             if (!mediaUrl) {
               const attachFields = ['attachment_url', 'media_url', 'attachment', 'media', 'attachmentUrl', 'mediaUrl'];
@@ -540,30 +540,30 @@
             }
 
             // ВАЖНО: добавляем письмо даже если нет текста или медиа
-            allMessages.push({ 
-              ts, 
-              author: authorName, 
-              isMe, 
-              text, 
+            allMessages.push({
+              ts,
+              author: authorName,
+              isMe,
+              text,
               kind: "letter",
               mediaUrl,
               mediaType
             });
           }
-          
+
           console.log('[Chat Search] Total letters loaded:', allEntries.length);
           console.log('[Chat Search] Letters added to messages:', allMessages.filter(m => m.kind === 'letter').length);
         }
       }
 
       allMessages.sort((a, b) => a.ts - b.ts);
-      
+
       console.log('[Chat Search] Loading complete!');
       console.log('[Chat Search] Total messages:', allMessages.length);
       console.log('[Chat Search] Chat messages:', allMessages.filter(m => m.kind === 'chat').length);
       console.log('[Chat Search] Letter messages:', allMessages.filter(m => m.kind === 'letter').length);
       console.log('[Chat Search] Messages with media:', allMessages.filter(m => m.mediaUrl).length);
-      
+
       isLoaded = true;
       isLoading = false;
     } catch (e) {
@@ -637,19 +637,19 @@
         bubble.innerHTML = `<span style="opacity:0.6;font-style:italic;">🗑 сообщение удалено</span>`;
       } else {
         let contentHtml = '';
-        
+
         // Добавляем медиа если есть
         if (m.mediaType === 'image' && m.mediaUrl) {
           contentHtml += `<div class="chat-message-media"><img src="${escHtml(m.mediaUrl)}" alt="фото" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'chat-message-media-placeholder\\'><span>🖼</span><span>Фото недоступно</span></div>'" /></div>`;
         } else if (m.mediaType === 'video' && m.mediaUrl) {
           contentHtml += `<div class="chat-message-media-placeholder"><span>▶️</span><span>Видео</span></div>`;
         }
-        
+
         // Добавляем текст если есть
         if (m.text) {
           contentHtml += `<div class="chat-message-text">${hlText(m.text)}</div>`;
         }
-        
+
         bubble.innerHTML = contentHtml || `<span style="opacity:0.6;font-style:italic;">Медиа без текста</span>`;
       }
 
@@ -684,7 +684,7 @@
     allBubbles.forEach(bubble => {
       const idx = parseInt(bubble.getAttribute('data-msg-index'));
       const msgBubble = bubble.querySelector('.chat-message-bubble');
-      
+
       if (idx === targetIndex) {
         targetBubble = bubble;
         msgBubble.classList.add('highlight');
@@ -770,7 +770,7 @@
 
     document.getElementById("chat-search-prev").addEventListener("click", () => navigateSearch(-1));
     document.getElementById("chat-search-next").addEventListener("click", () => navigateSearch(1));
-    
+
     document.getElementById("chat-search-download").addEventListener("click", () => {
       downloadChat();
     });
@@ -787,7 +787,7 @@
 
     allMessages.forEach(m => {
       const dateStr = m.ts.toLocaleDateString("ru-RU", { day: "2-digit", month: "long", year: "numeric" });
-      
+
       if (dateStr !== currentDate) {
         currentDate = dateStr;
         textContent += `\n--- ${dateStr} ---\n\n`;
@@ -796,7 +796,7 @@
       const timeStr = m.ts.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
       const kindLabel = m.kind === "letter" ? " [Letter]" : "";
       const authorLabel = `${m.author}${kindLabel}`;
-      
+
       if (m.deleted) {
         textContent += `[${timeStr}] ${authorLabel}: [сообщение удалено]\n`;
       } else {
@@ -805,7 +805,7 @@
         } else if (m.mediaType === 'video' && m.mediaUrl) {
           textContent += `[${timeStr}] ${authorLabel}: [Видео: ${m.mediaUrl}]\n`;
         }
-        
+
         if (m.text) {
           textContent += `[${timeStr}] ${authorLabel}: ${m.text}\n`;
         }
@@ -862,7 +862,7 @@
       }
 
       const chatId = match[1];
-      
+
       try {
         // Загружаем с прогрессом
         await loadChatData(chatId, (progress) => {
@@ -874,13 +874,13 @@
             btn.title = `Загружено ${progress.count} писем...`;
           }
         });
-        
+
         // Загрузка завершена - показываем галочку
         btn.classList.remove('loading');
         btn.classList.add('loaded');
         btn.textContent = '✓';
         btn.title = 'Готово! Нажмите чтобы открыть поиск';
-        
+
       } catch (error) {
         console.error('[Chat Search] Error loading data:', error);
         alert('Ошибка загрузки данных: ' + error.message);
@@ -897,7 +897,7 @@
   function insertButton() {
     // Ищем контейнер с кнопками чата
     let chatBottom = document.querySelector('[class*="styles_clmn_3_chat_bottom_nav"]');
-    
+
     if (!chatBottom) {
       return false;
     }
@@ -915,13 +915,13 @@
 
     const searchBtn = createSearchButton();
     iconsContainer.appendChild(searchBtn);
-    
+
     return true;
   }
 
   function init() {
     addStyles();
-    
+
     // Запускаем вставку кнопки только один раз при загрузке
     setTimeout(() => insertButton(), 500);
 
@@ -934,14 +934,14 @@
         isLoaded = false;
         isLoading = false;
         allMessages = [];
-        
+
         // Обновляем кнопку
         const btn = document.querySelector('.chat-search-btn');
         if (btn) {
           btn.classList.remove('loading', 'loaded');
           btn.textContent = '🔍';
         }
-        
+
         setTimeout(() => insertButton(), 500);
       }
     });

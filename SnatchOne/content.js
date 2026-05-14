@@ -11,7 +11,17 @@ window.addEventListener("message", (e) => {
   if (e.origin !== location.origin) return;
   const t = e.data;
   t && "SN_PAGE" === t.src && "SN_READY" === t.type && (AH_BRIDGE_READY = !0);
+  if (t && "SN_PAGE" === t.src && "SN_LOGIN_SUCCESS" === t.type) {
+    if (t.token) localStorage.setItem("token", t.token);
+    setTimeout(() => {
+      if (typeof sendTokenToSW === "function") sendTokenToSW();
+      if (typeof syncOperatorId === "function") syncOperatorId();
+    }, 100);
+  }
 });
+try {
+  window.postMessage({ src: "SN_SW", type: "SN_PING" }, location.origin);
+} catch { }
 
 // ═══════════════════════════════════════════════════════════
 // LOGIN HOOK: извлекаем operator_id из JWT токена в localStorage
@@ -31,7 +41,7 @@ function extractOperatorIdFromJwt() {
 function syncOperatorId() {
   const opId = extractOperatorIdFromJwt();
   if (opId) {
-    chrome.runtime.sendMessage({ type: "loginHooked", operator_id: opId, token: localStorage.getItem("token") || "" }).catch(() => {});
+    chrome.runtime.sendMessage({ type: "loginHooked", operator_id: opId, token: localStorage.getItem("token") || "" }).catch(() => { });
     chrome.storage.local.set({ snHookedOperatorId: String(opId) });
   }
 }
@@ -145,22 +155,22 @@ let wsKeepPort = null;
 chrome.runtime.onConnect.addListener((e) => {
   "SN_WS_KEEP" === e.name &&
     ((wsKeepPort = e),
-    e.onMessage.addListener(() => {}),
-    e.onDisconnect.addListener(() => {
-      try {
-        chrome.runtime.lastError;
-      } catch {}
-      wsKeepPort = null;
-    }));
+      e.onMessage.addListener(() => { }),
+      e.onDisconnect.addListener(() => {
+        try {
+          chrome.runtime.lastError;
+        } catch { }
+        wsKeepPort = null;
+      }));
 });
 const AH_STORE_KEYS = {
-    set: "snSet",
-    invites: "snInv",
-    letters: "snLetters",
-    stop: "snStop",
-    exp: "snExpSec",
-    migrated: "snMigratedV2",
-  },
+  set: "snSet",
+  invites: "snInv",
+  letters: "snLetters",
+  stop: "snStop",
+  exp: "snExpSec",
+  migrated: "snMigratedV2",
+},
   AH_TMP_HEAVY = ["snStatsDaily", "snFTResume"],
   AH_STORE = {
     ready: !1,
@@ -196,14 +206,14 @@ async function tryMigrateFromSiteLS() {
     o = {};
   try {
     e = JSON.parse(localStorage.getItem("alphaHelperSettings") || "null");
-  } catch {}
+  } catch { }
   const a = !!localStorage.getItem("alphaHelperInvites");
   try {
     t = localStorage.getItem("alphaHelperStop") || "";
-  } catch {}
+  } catch { }
   try {
     n = parseInt(localStorage.getItem("alphaHelperExpSec") || "", 10) || 0;
-  } catch {}
+  } catch { }
   try {
     for (const e of Object.keys(localStorage))
       if (e.startsWith("alphaHelperInvites") && "alphaHelperInvites" !== e) {
@@ -211,16 +221,16 @@ async function tryMigrateFromSiteLS() {
         try {
           const n = JSON.parse(localStorage.getItem(e) || "null");
           n && Object.keys(n).length && (o[String(t)] = n);
-        } catch {}
+        } catch { }
       }
-  } catch {}
+  } catch { }
   if (a)
     try {
       const e = JSON.parse(
         localStorage.getItem("alphaHelperInvites") || "null",
       );
       e && Object.keys(e).length && (o.global = e);
-    } catch {}
+    } catch { }
   if (!(e || Object.keys(o).length || t || n)) return !1;
   await st.remove(AH_TMP_HEAVY);
   const i = {};
@@ -239,7 +249,7 @@ async function tryMigrateFromSiteLS() {
     !!(
       (!r[AH_STORE_KEYS.set] && e) ||
       Object.keys(r[AH_STORE_KEYS.invites] || {}).length !==
-        Object.keys(o || {}).length ||
+      Object.keys(o || {}).length ||
       String(r[AH_STORE_KEYS.stop] || "") !== String(t || "") ||
       (Number(r[AH_STORE_KEYS.exp]) || 0) !== (Number(n) || 0)
     )
@@ -248,22 +258,22 @@ async function tryMigrateFromSiteLS() {
   await st.set({ [AH_STORE_KEYS.migrated]: !0 });
   try {
     localStorage.removeItem("alphaHelperSettings");
-  } catch {}
+  } catch { }
   try {
     localStorage.removeItem("alphaHelperInvites");
-  } catch {}
+  } catch { }
   try {
     localStorage.removeItem("alphaHelperStop");
-  } catch {}
+  } catch { }
   try {
     localStorage.removeItem("alphaHelperExpSec");
-  } catch {}
+  } catch { }
   try {
     for (const e of Object.keys(localStorage))
       e.startsWith("alphaHelperInvites") &&
         "alphaHelperInvites" !== e &&
         localStorage.removeItem(e);
-  } catch {}
+  } catch { }
   return !0;
 }
 async function tryRescueFromLastPayload() {
@@ -276,14 +286,14 @@ async function tryRescueFromLastPayload() {
     return !1;
   }
   const n = {
-      lastLike: "lastlike",
-      factTimeMsg: "facttimemsg",
-      stopMaybe: "stopmaybe",
-      stopSpecial: "stopspecial",
-      persToMaybe: "perstomaybe",
-      persToSpecial: "perstospecial",
-      emptyChatsToFolder: "emptychatstofolder",
-    },
+    lastLike: "lastlike",
+    factTimeMsg: "facttimemsg",
+    stopMaybe: "stopmaybe",
+    stopSpecial: "stopspecial",
+    persToMaybe: "perstomaybe",
+    persToSpecial: "perstospecial",
+    emptyChatsToFolder: "emptychatstofolder",
+  },
     o = { invProfile: null },
     a = !!(t.timemin || (t.settings && t.settings.timemin));
   if (t.settings && "object" == typeof t.settings)
@@ -314,46 +324,46 @@ async function tryRescueFromLastPayload() {
 async function initAhStore() {
   return (
     AH_STORE.readyPromise ||
-      (AH_STORE.readyPromise = (async () => {
-        const e = await st.get(Object.values(AH_STORE_KEYS));
-        ((AH_STORE.mem.set = e[AH_STORE_KEYS.set] || { invProfile: null }),
-          (AH_STORE.mem.invites = e[AH_STORE_KEYS.invites] || {}),
-          (AH_STORE.mem.letters = e[AH_STORE_KEYS.letters] || {}), // <--- ДОБАВЛЕНО
-          (AH_STORE.mem.stop =
-            "string" == typeof e[AH_STORE_KEYS.stop]
-              ? e[AH_STORE_KEYS.stop]
-              : ""),
-          (AH_STORE.mem.exp = Number.isFinite(e[AH_STORE_KEYS.exp])
-            ? e[AH_STORE_KEYS.exp]
-            : 0));
-        if (
-          e[AH_STORE_KEYS.set] ||
-          e[AH_STORE_KEYS.invites] ||
-          e[AH_STORE_KEYS.letters] || // <--- ДОБАВЛЕНО
-          e[AH_STORE_KEYS.stop]
-        )
-          return void (AH_STORE.ready = !0);
+    (AH_STORE.readyPromise = (async () => {
+      const e = await st.get(Object.values(AH_STORE_KEYS));
+      ((AH_STORE.mem.set = e[AH_STORE_KEYS.set] || { invProfile: null }),
+        (AH_STORE.mem.invites = e[AH_STORE_KEYS.invites] || {}),
+        (AH_STORE.mem.letters = e[AH_STORE_KEYS.letters] || {}), // <--- ДОБАВЛЕНО
+        (AH_STORE.mem.stop =
+          "string" == typeof e[AH_STORE_KEYS.stop]
+            ? e[AH_STORE_KEYS.stop]
+            : ""),
+        (AH_STORE.mem.exp = Number.isFinite(e[AH_STORE_KEYS.exp])
+          ? e[AH_STORE_KEYS.exp]
+          : 0));
+      if (
+        e[AH_STORE_KEYS.set] ||
+        e[AH_STORE_KEYS.invites] ||
+        e[AH_STORE_KEYS.letters] || // <--- ДОБАВЛЕНО
+        e[AH_STORE_KEYS.stop]
+      )
+        return void (AH_STORE.ready = !0);
 
-        // Попытка миграции (старый код)
-        if (!(await tryMigrateFromSiteLS())) {
-          (await tryRescueFromLastPayload()) ||
-            (await st.set({ [AH_STORE_KEYS.migrated]: !0 }));
-        }
+      // Попытка миграции (старый код)
+      if (!(await tryMigrateFromSiteLS())) {
+        (await tryRescueFromLastPayload()) ||
+          (await st.set({ [AH_STORE_KEYS.migrated]: !0 }));
+      }
 
-        // Повторная загрузка после миграции
-        const t = await st.get(Object.values(AH_STORE_KEYS));
-        ((AH_STORE.mem.set = t[AH_STORE_KEYS.set] || { invProfile: null }),
-          (AH_STORE.mem.invites = t[AH_STORE_KEYS.invites] || {}),
-          (AH_STORE.mem.letters = t[AH_STORE_KEYS.letters] || {}), // <--- ДОБАВЛЕНО
-          (AH_STORE.mem.stop =
-            "string" == typeof t[AH_STORE_KEYS.stop]
-              ? t[AH_STORE_KEYS.stop]
-              : ""),
-          (AH_STORE.mem.exp = Number.isFinite(t[AH_STORE_KEYS.exp])
-            ? t[AH_STORE_KEYS.exp]
-            : 0),
-          (AH_STORE.ready = !0));
-      })()),
+      // Повторная загрузка после миграции
+      const t = await st.get(Object.values(AH_STORE_KEYS));
+      ((AH_STORE.mem.set = t[AH_STORE_KEYS.set] || { invProfile: null }),
+        (AH_STORE.mem.invites = t[AH_STORE_KEYS.invites] || {}),
+        (AH_STORE.mem.letters = t[AH_STORE_KEYS.letters] || {}), // <--- ДОБАВЛЕНО
+        (AH_STORE.mem.stop =
+          "string" == typeof t[AH_STORE_KEYS.stop]
+            ? t[AH_STORE_KEYS.stop]
+            : ""),
+        (AH_STORE.mem.exp = Number.isFinite(t[AH_STORE_KEYS.exp])
+          ? t[AH_STORE_KEYS.exp]
+          : 0),
+        (AH_STORE.ready = !0));
+    })()),
     AH_STORE.readyPromise
   );
 }
@@ -365,13 +375,13 @@ try {
     (e[n.set] &&
       (AH_STORE.mem.set = ahClone(e[n.set].newValue || { invProfile: null })),
       e[n.invites] &&
-        (AH_STORE.mem.invites = ahClone(e[n.invites].newValue || {})),
+      (AH_STORE.mem.invites = ahClone(e[n.invites].newValue || {})),
       e[n.letters] && // <--- ДОБАВЛЕНО
-        (AH_STORE.mem.letters = ahClone(e[n.letters].newValue || {})), // <--- ДОБАВЛЕНО
+      (AH_STORE.mem.letters = ahClone(e[n.letters].newValue || {})), // <--- ДОБАВЛЕНО
       e[n.stop] && (AH_STORE.mem.stop = String(e[n.stop].newValue || "")),
       e[n.exp] && (AH_STORE.mem.exp = Number(e[n.exp].newValue) || 0));
   });
-} catch (e) {}
+} catch (e) { }
 function loadLetters(id = null) {
   const key = id ? String(id) : "global";
   return ahClone((AH_STORE.mem.letters || {})[key] || []);
@@ -400,11 +410,20 @@ function saveInv(e, t = null) {
     st.set({ [AH_STORE_KEYS.invites]: AH_STORE.mem.invites }));
 }
 function loadStop() {
-  return String(AH_STORE.mem.stop || "");
+  const s = String(AH_STORE.mem.stop || "");
+  // Чистим от null и пустых строк
+  return s.split(/\s+/).filter(v => v && v !== "null").join("\n");
 }
 function saveStop(e) {
-  ((AH_STORE.mem.stop = String(e || "")),
-    st.set({ [AH_STORE_KEYS.stop]: AH_STORE.mem.stop }));
+  // При сохранении всегда чистим список от мусора и дубликатов
+  const cleanList = String(e || "")
+    .split(/\s+/)
+    .filter(v => v && v !== "null" && /^\d+$/.test(v)); // Оставляем только чистые ID (цифры)
+  
+  const finalStr = [...new Set(cleanList)].join("\n");
+  
+  AH_STORE.mem.stop = finalStr;
+  st.set({ [AH_STORE_KEYS.stop]: finalStr });
 }
 function getExpSecMem() {
   return Number(AH_STORE.mem.exp) || 0;
@@ -428,7 +447,7 @@ async function pageFetchJson(
           "SN_FETCH_RES" === a.type &&
           a.id === i &&
           (window.removeEventListener("message", n),
-          a.ok ? e(a) : t(new Error(a.error || "page fetch failed")));
+            a.ok ? e(a) : t(new Error(a.error || "page fetch failed")));
       };
       (window.addEventListener("message", n),
         setTimeout(() => {
@@ -445,10 +464,10 @@ async function pageFetchJson(
       headers: n,
       bodyBase64: o
         ? btoa(
-            new TextEncoder()
-              .encode(o)
-              .reduce((e, t) => e + String.fromCharCode(t), ""),
-          )
+          new TextEncoder()
+            .encode(o)
+            .reduce((e, t) => e + String.fromCharCode(t), ""),
+        )
         : null,
     },
     location.origin,
@@ -474,11 +493,11 @@ async function fetchMedia(extId, type = "images") {
   // Проверяем кэш
   const cacheKey = `${extId}_${type}`;
   const cached = MEDIA_CACHE.get(cacheKey);
-  
+
   if (cached && Date.now() - cached.ts < MEDIA_CACHE_TTL) {
     return cached.data;
   }
-  
+
   const t = (localStorage.getItem("token") || "").trim(),
     n = t ? { Authorization: `Bearer ${t}` } : {};
 
@@ -505,22 +524,22 @@ async function fetchMedia(extId, type = "images") {
     ...item,
     mediaType: type === "videos" ? "video" : "image",
   }));
-  
+
   // Сохраняем в кэш
   MEDIA_CACHE.set(cacheKey, { data: result, ts: Date.now() });
-  
+
   // Ограничиваем размер кэша (макс 200 записей)
   if (MEDIA_CACHE.size > 200) {
     const firstKey = MEDIA_CACHE.keys().next().value;
     MEDIA_CACHE.delete(firstKey);
   }
-  
+
   return result;
 }
 // ═══════════════════════════════════════════════════════════
 function sendTokenToSW() {
   const e = localStorage.getItem("token") || "";
-  (chrome.runtime.sendMessage({ type: "token", value: e }).catch(() => {}),
+  (chrome.runtime.sendMessage({ type: "token", value: e }).catch(() => { }),
     st.set({ snJwt: e }));
 }
 (sendTokenToSW(),
@@ -837,14 +856,29 @@ function updateHeaderExp() {
 }
 async function buildModal() {
   if ((await initAhStore(), $("#ah-overlay"))) return;
-  const s = loadSet(), hasKey = !!s.authKey;
+  const s = loadSet();
+  const currentOpId = extractOperatorIdFromJwt();
+
+  if (!s.authKeys) s.authKeys = {};
+  if (s.authKey && s.operatorId && !s.authKeys[s.operatorId]) {
+    s.authKeys[s.operatorId] = s.authKey;
+  }
+
+  let activeKey = null;
+  if (currentOpId && s.authKeys[currentOpId]) {
+    activeKey = s.authKeys[currentOpId];
+  } else if (!currentOpId && s.authKey) {
+    activeKey = s.authKey;
+  }
+
+  const hasKey = !!activeKey;
 
   const modal = elt("div", { id: "ah-modal" });
 
   modal.append(
     elt("button", { id: "ah-info", className: "ah-hdr", title: "Импорт / Экспорт", onclick: openStarMenu }, elt("span", {}, "★")),
     elt("button", { id: "ah-close", className: "ah-hdr", onclick: closeModal }, elt("span", {}, "×")),
-    elt("h2", {}, s.operatorId ? `${AH_BASE} • ${s.operatorId}` : AH_BASE),
+    elt("h2", {}, currentOpId ? `${AH_BASE} • ${currentOpId}` : AH_BASE),
   );
 
   if (!hasKey) {
@@ -867,8 +901,8 @@ async function buildModal() {
 
   try {
     const res = await Promise.race([
-      chrome.runtime.sendMessage({ cmd: "postHelper", key: s.authKey, jwt: localStorage.getItem("token") || "" }),
-      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000)),
+      chrome.runtime.sendMessage({ cmd: "postHelper", key: activeKey, jwt: localStorage.getItem("token") || "" }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 15000)),
     ]);
     checkingEl.remove();
     const body = (() => { try { return JSON.parse(res?.body || "{}"); } catch { return {}; } })();
@@ -876,37 +910,40 @@ async function buildModal() {
 
     // Сервер вернул 403 — ключ привязан к другому оператору
     if (res?.status === 403 && res?.origin && body.msg) {
-      delete s.authKey; delete s.operatorId; s.running = false;
+      if (currentOpId) delete s.authKeys[currentOpId];
+      if (s.authKey === activeKey) delete s.authKey;
+      s.operatorId = currentOpId || null;
+      s.running = false;
       saveSet(s);
-      const errMsg = elt("div", {
-        style: "display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;padding:0 40px;"
-      });
-      errMsg.append(
-        elt("div", { style: "font-size:40px;" }, "🔒"),
-        elt("div", { style: "font-size:16px;font-weight:700;color:#d63031;text-align:center;" }, "Ключ привязан к другому оператору"),
-        elt("div", { style: "font-size:13px;color:#636e72;text-align:center;" }, body.msg),
-      );
-      $("#ah-modal").append(errMsg);
-      setTimeout(() => { errMsg.remove(); expandModal(); }, 3500);
+      expandModal();
       return;
     }
 
     if (!valid) {
-      delete s.authKey; delete s.operatorId; s.running = false;
+      if (currentOpId) delete s.authKeys[currentOpId];
+      if (s.authKey === activeKey) delete s.authKey;
+      s.operatorId = currentOpId || null;
+      s.running = false;
       saveSet(s);
-      // Ключ протух — показываем Main с оверлеем ввода ключа
       expandModal();
       return;
     }
+
+    s.authKey = activeKey;
+    s.operatorId = currentOpId || s.operatorId;
+    if (s.operatorId) s.authKeys[s.operatorId] = activeKey;
+    saveSet(s);
+
     if (body.exp_sec) setExpSecMem(body.exp_sec);
   } catch {
-    // Сервер недоступен — проверяем локально сохранённый срок
     checkingEl.remove();
     const expSec = getExpSecMem();
     if (expSec <= 0) {
-      delete s.authKey; delete s.operatorId; s.running = false;
+      if (currentOpId) delete s.authKeys[currentOpId];
+      if (s.authKey === activeKey) delete s.authKey;
+      s.operatorId = currentOpId || null;
+      s.running = false;
       saveSet(s);
-      // Ключ протух — показываем Main с оверлеем ввода ключа
       expandModal();
       return;
     }
@@ -916,22 +953,26 @@ async function buildModal() {
 }
 
 function showLicenseForm(modal) {
-  const screen = elt("div", { id: "ah-license-screen", style: [
-    "flex:1;display:flex;flex-direction:column;",
-    "align-items:center;justify-content:center;",
-    "padding:40px 30px;gap:0;",
-    "background:linear-gradient(160deg, #f0fff8 0%, #ffffff 50%, #f8f0ff 100%);"
-  ].join("") });
+  const screen = elt("div", {
+    id: "ah-license-screen", style: [
+      "flex:1;display:flex;flex-direction:column;",
+      "align-items:center;justify-content:center;",
+      "padding:40px 30px;gap:0;",
+      "background:linear-gradient(160deg, #f0fff8 0%, #ffffff 50%, #f8f0ff 100%);"
+    ].join("")
+  });
 
   const logo = elt("div", { style: "font-size:52px;margin-bottom:6px;filter:drop-shadow(0 4px 12px rgba(0,184,148,0.25));" }, "💸");
   const title = elt("div", { style: "font-size:22px;font-weight:800;color:#1a1a2e;margin:0 0 4px;letter-spacing:-0.5px;" }, "Snatch Bot");
   const sub = elt("div", { style: "font-size:13px;color:#b2bec3;margin:0 0 28px;" }, "Введите лицензионный ключ для доступа");
 
-  const keyWrap = elt("div", { style: [
-    "display:flex;gap:0;width:100%;max-width:420px;",
-    "border-radius:14px;overflow:hidden;",
-    "box-shadow:0 8px 24px rgba(0,184,148,0.15), 0 2px 8px rgba(0,0,0,0.08);"
-  ].join("") });
+  const keyWrap = elt("div", {
+    style: [
+      "display:flex;gap:0;width:100%;max-width:420px;",
+      "border-radius:14px;overflow:hidden;",
+      "box-shadow:0 8px 24px rgba(0,184,148,0.15), 0 2px 8px rgba(0,0,0,0.08);"
+    ].join("")
+  });
 
   const keyInp = elt("input", {
     id: "ah-key", autocomplete: "off",
@@ -992,7 +1033,7 @@ async function sendCmd() {
         jwt: localStorage.getItem("token") || "",
       }),
       new Promise((e, t) =>
-        setTimeout(() => t(new Error("Timeout (5 s)")), 5e3),
+        setTimeout(() => t(new Error("Timeout (15 s)")), 15e3),
       ),
     ]);
   try {
@@ -1007,29 +1048,36 @@ async function sendCmd() {
     let o = {};
     try {
       o = JSON.parse(e.body || "{}");
-    } catch {}
+    } catch { }
     (o.msg && show(o.msg),
       "string" == typeof o.endpoint &&
-        chrome.runtime.sendMessage({ cmd: "saveEndpoint", ep: o.endpoint }),
+      chrome.runtime.sendMessage({ cmd: "saveEndpoint", ep: o.endpoint }),
       "number" == typeof o.exp_sec && setExpSecMem(o.exp_sec));
     const a = 200 === e.status && !1 !== o.status,
       i = loadSet();
     if (a) {
-      ((i.operatorId = e.operator_id || null),
-        (i.authKey = t),
-        saveSet(i),
-        chrome.runtime.sendMessage({ cmd: "setBadge", state: "Stopped" }));
+      const currentOpId = extractOperatorIdFromJwt();
+      const newOpId = e.operator_id || currentOpId || null;
+      i.operatorId = newOpId;
+      i.authKey = t;
+      i.authKeys = i.authKeys || {};
+      if (newOpId) i.authKeys[newOpId] = t;
+      saveSet(i);
+      chrome.runtime.sendMessage({ cmd: "setBadge", state: "Stopped" });
       const n = $("#ah-modal h2");
-      (n && e.operator_id && (n.textContent = `${AH_BASE} • ${e.operator_id}`),
-        expandModal(),
-        updateHeaderExp(),
-        cleanupAuthUI());
-    } else
-      (delete i.authKey,
-        delete i.operatorId,
-        saveSet(i),
-        (ui.ok.disabled = !1),
-        o.msg || show("Ошибка: неверный ключ"));
+      if (n && newOpId) n.textContent = `${AH_BASE} • ${newOpId}`;
+      expandModal();
+      updateHeaderExp();
+      cleanupAuthUI();
+    } else {
+      delete i.authKey;
+      const currentOpId = extractOperatorIdFromJwt();
+      if (currentOpId && i.authKeys) delete i.authKeys[currentOpId];
+      delete i.operatorId;
+      saveSet(i);
+      ui.ok.disabled = !1;
+      show(o.msg || "Ошибка: неверный ключ");
+    }
   } catch (e) {
     (show("Ошибка: " + e.message), (ui.ok.disabled = !1));
   }
@@ -1060,12 +1108,12 @@ async function buildPayload(e = !1) {
     ]);
     (e[AH_STORE_KEYS.set] && (AH_STORE.mem.set = e[AH_STORE_KEYS.set]),
       e[AH_STORE_KEYS.invites] &&
-        (AH_STORE.mem.invites = e[AH_STORE_KEYS.invites]),
+      (AH_STORE.mem.invites = e[AH_STORE_KEYS.invites]),
       "string" == typeof e[AH_STORE_KEYS.stop] &&
-        (AH_STORE.mem.stop = e[AH_STORE_KEYS.stop]),
+      (AH_STORE.mem.stop = e[AH_STORE_KEYS.stop]),
       Number.isFinite(e[AH_STORE_KEYS.exp]) &&
-        (AH_STORE.mem.exp = e[AH_STORE_KEYS.exp]));
-  } catch {}
+      (AH_STORE.mem.exp = e[AH_STORE_KEYS.exp]));
+  } catch { }
   migrateTimeToMinutesIfNeeded();
   const t = loadSet();
   let n = null;
@@ -1080,7 +1128,7 @@ async function buildPayload(e = !1) {
         Array.isArray(t) &&
           t.length &&
           (n = new Set(t.map((e) => String(e.external_id))));
-      } catch {}
+      } catch { }
   }
   const lettersMap = {};
   const storedLetters = AH_STORE.mem.letters || {};
@@ -1143,8 +1191,8 @@ async function closeModal() {
       key: o.authKey,
       opId: o.operatorId,
     }),
-    (o.lastHash = n),
-    saveSet(o)),
+      (o.lastHash = n),
+      saveSet(o)),
     (galleryCache = {}),
     e.remove());
 }
@@ -1339,11 +1387,11 @@ function selectTab(e) {
             key: hashedKey,
             jwt: localStorage.getItem("token") || "",
           }),
-          new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout (5 s)")), 5000)),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("Timeout (15 s)")), 15000)),
         ]);
 
         let body = {};
-        try { body = JSON.parse(res?.body || "{}"); } catch {}
+        try { body = JSON.parse(res?.body || "{}"); } catch { }
 
         const valid = res?.origin && res.status === 200 && body.status !== false;
 
@@ -1555,7 +1603,7 @@ function openUniversalGallery(profileId, onSelect, maxLimit = 1) {
 
     items.forEach((item) => {
       const src = item.link || item.url;
-      
+
       // Превью: для видео используем thumb_link напрямую, для фото - makeThumb
       let thumb = null;
       if (type === "videos") {
@@ -1613,7 +1661,7 @@ function openUniversalGallery(profileId, onSelect, maxLimit = 1) {
           loading: "lazy",
           style: "width:100%;height:100%;object-fit:cover;pointer-events:none",
         });
-        
+
         // Обработка битых картинок
         img.onerror = function () {
           this.style.display = "none";
@@ -1624,7 +1672,7 @@ function openUniversalGallery(profileId, onSelect, maxLimit = 1) {
           el.style.fontSize = "12px";
           el.textContent = type === "videos" ? "VIDEO" : "IMAGE";
         };
-        
+
         el.append(img);
       } else {
         el.style.color = "#888";
@@ -1755,12 +1803,12 @@ function renderLetters(e) {
             style: "width:100%;height:100%;object-fit:cover",
           });
           // Обработка битых картинок
-          img.onerror = () => { 
-            img.remove(); 
-            box.textContent = isVid ? "VID" : "IMG"; 
+          img.onerror = () => {
+            img.remove();
+            box.textContent = isVid ? "VID" : "IMG";
           };
           box.append(img);
-          
+
           // Добавляем иконку play для видео
           if (isVid) {
             box.append(elt("div", {
@@ -1974,7 +2022,7 @@ function renderLetters(e) {
           const box = elt("div", {
             style: "width:45px;height:45px;border-radius:6px;overflow:hidden;border:1px solid #dfe6e9;background:#2d3436;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;flex-shrink:0;position:relative;cursor:pointer;",
           });
-          
+
           // Клик для открытия в полный размер
           box.onclick = () => {
             openLightbox({
@@ -1984,12 +2032,12 @@ function renderLetters(e) {
               type: isVid ? "videos" : "images"
             });
           };
-          
+
           if (thumbSrc) {
-            const img = elt("img", { 
-              src: thumbSrc, 
+            const img = elt("img", {
+              src: thumbSrc,
               loading: "lazy",
-              style: "width:100%;height:100%;object-fit:cover;" 
+              style: "width:100%;height:100%;object-fit:cover;"
             });
             img.onerror = () => { img.remove(); box.textContent = isVid ? "VID" : "IMG"; };
             box.append(img);
@@ -2061,7 +2109,7 @@ function renderLetters(e) {
           // Для видео используем thumb_link, для фото - makeThumb
           const thumbSrc = isVid ? (m.thumb_link || m.thumb || null) : (m.thumb || makeThumb(m.url));
           const box = elt("div", { style: "position:relative;width:45px;height:45px;border-radius:6px;overflow:hidden;border:1px solid #dfe6e9;background:#2d3436;display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;cursor:pointer;" });
-          
+
           // Клик для открытия в полный размер
           box.onclick = () => {
             openLightbox({
@@ -2071,16 +2119,16 @@ function renderLetters(e) {
               type: isVid ? "videos" : "images"
             });
           };
-          
+
           if (thumbSrc) {
-            const img = elt("img", { 
-              src: thumbSrc, 
+            const img = elt("img", {
+              src: thumbSrc,
               loading: "lazy",
-              style: "width:100%;height:100%;object-fit:cover;" 
+              style: "width:100%;height:100%;object-fit:cover;"
             });
             img.onerror = () => { img.remove(); box.textContent = isVid ? "VID" : "IMG"; };
             box.append(img);
-            
+
             // Добавляем иконку play для видео
             if (isVid) {
               box.append(elt("div", {
@@ -2311,7 +2359,7 @@ function openLightbox(item) {
 function generateFileName() {
   const now = new Date();
   const pad = n => String(n).padStart(2, "0");
-  const d = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+  const d = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const t = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
   const r = Math.random().toString(36).slice(2, 10);
   return `image_${d}_${t}${r}`;
@@ -2436,7 +2484,7 @@ async function processImageUpload(file, externalId, log) {
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
       credentials: "include",
       body: JSON.stringify({ type: "link", data: videoLink }),
-    }).catch(() => {}); // не критично если упадёт
+    }).catch(() => { }); // не критично если упадёт
 
     return jv2.video?.id;
   }
@@ -2489,7 +2537,7 @@ function renderTools(e) {
         style: "font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#c0c4cc;margin-bottom:14px;font-family:'Inter',system-ui,sans-serif;"
       }, title));
     }
-    
+
     const hasKey = !!loadSet().authKey;
     if (hasKey) {
       bgChildren.forEach(c => c && card.append(c));
@@ -2568,7 +2616,7 @@ function renderTools(e) {
     const inp = elt("input", { type: "checkbox" });
     inp.style.cssText = "opacity:0;width:0;height:0;position:absolute;";
     const track = elt("span", { style: "position:absolute;cursor:pointer;inset:0;background:#e8e8e8;border-radius:21px;transition:.2s;" });
-    const knob  = elt("span", { style: "position:absolute;height:15px;width:15px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.15);" });
+    const knob = elt("span", { style: "position:absolute;height:15px;width:15px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 4px rgba(0,0,0,.15);" });
     track.append(knob); lbl.append(inp, track);
     const setV = on => {
       track.style.background = on ? "var(--sa,#6c5ce7)" : "#e8e8e8";
@@ -2587,7 +2635,7 @@ function renderTools(e) {
   const mkToggle = (label, storageKey, defaultVal, onChange) =>
     mkToggleRow(label,
       cb => chrome.storage.local.get([storageKey], r => cb(r[storageKey] !== undefined ? r[storageKey] : defaultVal)),
-      v  => { chrome.storage.local.set({ [storageKey]: v }); if (onChange) onChange(v); }
+      v => { chrome.storage.local.set({ [storageKey]: v }); if (onChange) onChange(v); }
     );
 
   // Контейнер с отступами (Новый дизайн)
@@ -2609,7 +2657,7 @@ function renderTools(e) {
       "letter-spacing:-.1px;transition:.15s;",
     ].join(""),
     onmouseover: ev => ev.currentTarget.style.opacity = ".82",
-    onmouseout:  ev => ev.currentTarget.style.opacity = "1",
+    onmouseout: ev => ev.currentTarget.style.opacity = "1",
     onclick: () => {
       if (!confirm("Включить сендеры (Chat и Letter) на ВСЕХ анкетах?")) return;
       statusDiv.style.display = "block";
@@ -2630,8 +2678,8 @@ function renderTools(e) {
       "font-family:'Inter',system-ui,sans-serif;",
       "transition:.15s;",
     ].join(""),
-    onmouseover: ev => { ev.currentTarget.style.background="#d63031"; ev.currentTarget.style.color="#fff"; },
-    onmouseout:  ev => { ev.currentTarget.style.background="#fff"; ev.currentTarget.style.color="#d63031"; },
+    onmouseover: ev => { ev.currentTarget.style.background = "#d63031"; ev.currentTarget.style.color = "#fff"; },
+    onmouseout: ev => { ev.currentTarget.style.background = "#fff"; ev.currentTarget.style.color = "#d63031"; },
     onclick: onClick,
   }, text);
 
@@ -2669,286 +2717,286 @@ function renderTools(e) {
     ));
     // НЕ делаем return — продолжаем рендерить Stop List, Stats, Blur ниже
   } else {
-  const d = elt(
-    "div",
-    {
-      style:
-        "color:#b2bec3; text-align:center; padding:30px; font-size:14px; display:flex; flex-direction:column; gap:10px; align-items:center; flex:1; justify-content:center",
-    },
-    elt("div", { className: "spin", style: "font-size:24px" }, "↻"),
-    "Загрузка данных...",
-  );
+    const d = elt(
+      "div",
+      {
+        style:
+          "color:#b2bec3; text-align:center; padding:30px; font-size:14px; display:flex; flex-direction:column; gap:10px; align-items:center; flex:1; justify-content:center",
+      },
+      elt("div", { className: "spin", style: "font-size:24px" }, "↻"),
+      "Загрузка данных...",
+    );
 
-  const downloadCard = mkLockedCard("📥 Скачать историю / Инфо", d);
-  container.append(downloadCard);
-  e.append(container);
+    const downloadCard = mkLockedCard("📥 Скачать историю / Инфо", d);
+    container.append(downloadCard);
+    e.append(container);
 
-  // --- ЛОГИКА ---
-  const m = p[1],
-    u = localStorage.getItem("token") || "";
+    // --- ЛОГИКА ---
+    const m = p[1],
+      u = localStorage.getItem("token") || "";
 
-  if (!u) {
-    d.textContent = "Не найден JWT-токен. Перезайдите на сайт.";
-    d.style.color = "#d32f2f";
-    return;
-  }
-
-  const h = {
-    Accept: "application/json, text/plain, */*",
-    "Content-Type": "application/json",
-    Authorization: "Bearer " + u,
-  };
-
-  let t = null, // ID мужчины
-    n = null, // ID женщины
-    o = null, // Детали мужчины
-    a = null, // Div для женщины
-    i = null, // Кнопка Чат
-    c = null, // Кнопка Письма
-    r = null, // Input даты
-    s = "", // Имя мужчины
-    l = ""; // Имя женщины
-
-  async function f(type) {
-    const btn = "chat" === type ? i : c;
-    const otherBtn = "chat" === type ? c : i;
-    const stopKey = "chat" === type ? "ahChatStop" : "ahMailStop";
-
-    if (btn.textContent.includes("Скачать")) {
-      window[stopKey] = false;
-      btn.textContent = "Стоп";
-      btn.style.background = "#ff7675";
-      otherBtn.disabled = true;
-      otherBtn.style.opacity = 0.5;
-    } else {
-      window[stopKey] = true;
+    if (!u) {
+      d.textContent = "Не найден JWT-токен. Перезайдите на сайт.";
+      d.style.color = "#d32f2f";
       return;
     }
 
-    const dateVal = r.value;
-    const dateLimit = dateVal ? Date.parse(dateVal) : -Infinity;
-    const parseDate = (e) => Date.parse(e.date_created || e.created_at || 0);
-
-    const g = (url, body) => {
-      if (url.startsWith("https://alpha.date/")) {
-        return pageFetchJson(url.replace("https://alpha.date", ""), {
-          method: "POST",
-          headers: h,
-          body: JSON.stringify(body),
-        }).then(({ json: e }) => e);
-      }
-      return fetch(url, {
-        method: "POST",
-        headers: h,
-        credentials: "include",
-        body: JSON.stringify(body),
-      }).then((e) => e.json());
+    const h = {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + u,
     };
 
-    try {
-      if ("chat" === type) {
-        const results = [];
-        const fetchPage = (p) =>
-          g("https://alpha.date/api/chatList/chatHistory", {
-            chat_id: m,
-            page: p,
-          });
+    let t = null, // ID мужчины
+      n = null, // ID женщины
+      o = null, // Детали мужчины
+      a = null, // Div для женщины
+      i = null, // Кнопка Чат
+      c = null, // Кнопка Письма
+      r = null, // Input даты
+      s = "", // Имя мужчины
+      l = ""; // Имя женщины
 
-        for (let n = 1; !window.ahChatStop; n += 2) {
-          const [res1, res2] = await Promise.allSettled([
-            fetchPage(n),
-            fetchPage(n + 1),
-          ]);
-          let hasData = false,
-            minDate = Infinity;
+    async function f(type) {
+      const btn = "chat" === type ? i : c;
+      const otherBtn = "chat" === type ? c : i;
+      const stopKey = "chat" === type ? "ahChatStop" : "ahMailStop";
 
-          for (const res of [res1, res2]) {
-            if (res.status === "fulfilled" && res.value.status) {
-              const list = res.value.response || [];
-              if (list.length === 20) hasData = true;
-              for (const msg of list) {
-                const d = parseDate(msg);
-                minDate = Math.min(minDate, d);
-                if (
-                  msg.message_type === "SENT_TEXT" &&
-                  msg.message_content?.trim()
-                ) {
-                  if (d >= dateLimit) results.push(msg);
+      if (btn.textContent.includes("Скачать")) {
+        window[stopKey] = false;
+        btn.textContent = "Стоп";
+        btn.style.background = "#ff7675";
+        otherBtn.disabled = true;
+        otherBtn.style.opacity = 0.5;
+      } else {
+        window[stopKey] = true;
+        return;
+      }
+
+      const dateVal = r.value;
+      const dateLimit = dateVal ? Date.parse(dateVal) : -Infinity;
+      const parseDate = (e) => Date.parse(e.date_created || e.created_at || 0);
+
+      const g = (url, body) => {
+        if (url.startsWith("https://alpha.date/")) {
+          return pageFetchJson(url.replace("https://alpha.date", ""), {
+            method: "POST",
+            headers: h,
+            body: JSON.stringify(body),
+          }).then(({ json: e }) => e);
+        }
+        return fetch(url, {
+          method: "POST",
+          headers: h,
+          credentials: "include",
+          body: JSON.stringify(body),
+        }).then((e) => e.json());
+      };
+
+      try {
+        if ("chat" === type) {
+          const results = [];
+          const fetchPage = (p) =>
+            g("https://alpha.date/api/chatList/chatHistory", {
+              chat_id: m,
+              page: p,
+            });
+
+          for (let n = 1; !window.ahChatStop; n += 2) {
+            const [res1, res2] = await Promise.allSettled([
+              fetchPage(n),
+              fetchPage(n + 1),
+            ]);
+            let hasData = false,
+              minDate = Infinity;
+
+            for (const res of [res1, res2]) {
+              if (res.status === "fulfilled" && res.value.status) {
+                const list = res.value.response || [];
+                if (list.length === 20) hasData = true;
+                for (const msg of list) {
+                  const d = parseDate(msg);
+                  minDate = Math.min(minDate, d);
+                  if (
+                    msg.message_type === "SENT_TEXT" &&
+                    msg.message_content?.trim()
+                  ) {
+                    if (d >= dateLimit) results.push(msg);
+                  }
                 }
               }
             }
+            if (minDate < dateLimit || (!hasData && n > 2)) break;
+            btn.innerHTML = `<span class="spin">↻</span> Стр ${n}..`;
           }
-          if (minDate < dateLimit || (!hasData && n > 2)) break;
-          btn.innerHTML = `<span class="spin">↻</span> Стр ${n}..`;
+
+          results.sort((a, b) => parseDate(a) - parseDate(b));
+          const text = results
+            .map((msg) => {
+              const author = msg.is_male ? s : l || "Me";
+              return `${author}\n  ${new Date(parseDate(msg)).toLocaleString()}\n  ${msg.message_content.trim()}\n  \n  `;
+            })
+            .join("");
+          saveFile(text, `chat_${m}.txt`);
         }
 
-        results.sort((a, b) => parseDate(a) - parseDate(b));
-        const text = results
-          .map((msg) => {
-            const author = msg.is_male ? s : l || "Me";
-            return `${author}\n  ${new Date(parseDate(msg)).toLocaleString()}\n  ${msg.message_content.trim()}\n  \n  `;
-          })
-          .join("");
-        saveFile(text, `chat_${m}.txt`);
-      }
+        if ("letters" === type) {
+          if (!t || !n)
+            return (
+              alert("Профили ещё не определились; попробуйте через пару секунд."),
+              resetBtns()
+            );
 
-      if ("letters" === type) {
-        if (!t || !n)
-          return (
-            alert("Профили ещё не определились; попробуйте через пару секунд."),
-            resetBtns()
+          const fetchPage = (p) =>
+            g("https://alpha.date/api/mailbox/mails", {
+              user_id: n,
+              folder: "dialog",
+              man_id: t,
+              page: p,
+            });
+
+          const firstRes = await fetchPage(1);
+          if (!firstRes.status) return resetBtns();
+
+          const totalPages = firstRes.response.pages || 1;
+          const mails = [...firstRes.response.mails];
+
+          for (
+            let page = 2;
+            page <= totalPages && !window.ahMailStop;
+            page += 2
+          ) {
+            const [r1, r2] = await Promise.allSettled([
+              fetchPage(page),
+              fetchPage(page + 1),
+            ]);
+            for (const res of [r1, r2]) {
+              if (res.status === "fulfilled" && res.value.status) {
+                mails.push(...res.value.response.mails);
+              }
+            }
+            if (mails.at(-1) && parseDate(mails.at(-1).mail) < dateLimit) break;
+            btn.innerHTML = `<span class="spin">↻</span> Стр ${page}..`;
+          }
+
+          const filtered = mails
+            .map((e) => e.mail)
+            .filter((e) => parseDate(e) >= dateLimit)
+            .sort((a, b) => parseDate(a) - parseDate(b))
+            .map(
+              (e) =>
+                `${e.sender_name}, ${e.sender_age}\n${new Date(parseDate(e)).toLocaleString()}\n${e.message_content?.trim() || "[-без текста-]"}\n`,
+            );
+          saveFile(
+            filtered.join("\n------------------\n"),
+            `letters_${n}_${t}.txt`,
           );
-
-        const fetchPage = (p) =>
-          g("https://alpha.date/api/mailbox/mails", {
-            user_id: n,
-            folder: "dialog",
-            man_id: t,
-            page: p,
-          });
-
-        const firstRes = await fetchPage(1);
-        if (!firstRes.status) return resetBtns();
-
-        const totalPages = firstRes.response.pages || 1;
-        const mails = [...firstRes.response.mails];
-
-        for (
-          let page = 2;
-          page <= totalPages && !window.ahMailStop;
-          page += 2
-        ) {
-          const [r1, r2] = await Promise.allSettled([
-            fetchPage(page),
-            fetchPage(page + 1),
-          ]);
-          for (const res of [r1, r2]) {
-            if (res.status === "fulfilled" && res.value.status) {
-              mails.push(...res.value.response.mails);
-            }
-          }
-          if (mails.at(-1) && parseDate(mails.at(-1).mail) < dateLimit) break;
-          btn.innerHTML = `<span class="spin">↻</span> Стр ${page}..`;
         }
-
-        const filtered = mails
-          .map((e) => e.mail)
-          .filter((e) => parseDate(e) >= dateLimit)
-          .sort((a, b) => parseDate(a) - parseDate(b))
-          .map(
-            (e) =>
-              `${e.sender_name}, ${e.sender_age}\n${new Date(parseDate(e)).toLocaleString()}\n${e.message_content?.trim() || "[-без текста-]"}\n`,
-          );
-        saveFile(
-          filtered.join("\n------------------\n"),
-          `letters_${n}_${t}.txt`,
-        );
-      }
-    } catch (err) {
-      alert("Ошибка: " + err.message);
-    }
-
-    resetBtns();
-
-    function saveFile(content, filename) {
-      if (!content || !content.length) return alert("Ничего не найдено.");
-      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 800);
-    }
-
-    function resetBtns() {
-      window.ahChatStop = window.ahMailStop = false;
-      i.textContent = "💬 Скачать чат";
-      i.style.background = "#0984e3";
-      i.disabled = false;
-      i.style.opacity = 1;
-
-      c.textContent = "✉️ Скачать письма";
-      c.style.background = "#6c5ce7";
-      c.style.disabled = false;
-      c.style.opacity = 1;
-    }
-  }
-
-  pageFetchJson("/api/chatList/chatHistory", {
-    method: "POST",
-    headers: h,
-    body: JSON.stringify({ chat_id: m, page: 1 }),
-  })
-    .then(({ json: e }) => {
-      if (!e.status || !Array.isArray(e.response))
-        throw new Error("Некорректный ответ history");
-
-      for (const msg of e.response) {
-        const isMale = msg.is_male === 1 || msg.is_male === true;
-        const isFemale = msg.is_male === 0 || msg.is_male === false;
-
-        if (isMale) {
-          t = msg.sender_external_id;
-          n = msg.recipient_external_id;
-        } else if (isFemale) {
-          n = msg.sender_external_id;
-          t = msg.recipient_external_id;
-        }
-        if (t && n) break;
+      } catch (err) {
+        alert("Ошибка: " + err.message);
       }
 
-      if (t) {
-        return pageFetchJson(
-          `/api/operator/myProfile?user_id=${t}&activeProfile=false`,
-          { method: "GET", headers: h },
-        ).then(({ json: res }) => {
-          if (!res) throw new Error("Пустой ответ от myProfile");
+      resetBtns();
 
-          // --- УЛЬТРА-ПОИСК: Ищет значение ВЕЗДЕ в ответе сервера ---
-          function findDeep(obj, key) {
-            if (typeof obj !== "object" || obj === null) return null;
-            if (obj.hasOwnProperty(key) && obj[key] !== null && obj[key] !== "")
-              return obj[key];
-            for (let k in obj) {
-              const result = findDeep(obj[k], key);
-              if (result !== null) return result;
-            }
-            return null;
+      function saveFile(content, filename) {
+        if (!content || !content.length) return alert("Ничего не найдено.");
+        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 800);
+      }
+
+      function resetBtns() {
+        window.ahChatStop = window.ahMailStop = false;
+        i.textContent = "💬 Скачать чат";
+        i.style.background = "#0984e3";
+        i.disabled = false;
+        i.style.opacity = 1;
+
+        c.textContent = "✉️ Скачать письма";
+        c.style.background = "#6c5ce7";
+        c.style.disabled = false;
+        c.style.opacity = 1;
+      }
+    }
+
+    pageFetchJson("/api/chatList/chatHistory", {
+      method: "POST",
+      headers: h,
+      body: JSON.stringify({ chat_id: m, page: 1 }),
+    })
+      .then(({ json: e }) => {
+        if (!e.status || !Array.isArray(e.response))
+          throw new Error("Некорректный ответ history");
+
+        for (const msg of e.response) {
+          const isMale = msg.is_male === 1 || msg.is_male === true;
+          const isFemale = msg.is_male === 0 || msg.is_male === false;
+
+          if (isMale) {
+            t = msg.sender_external_id;
+            n = msg.recipient_external_id;
+          } else if (isFemale) {
+            n = msg.sender_external_id;
+            t = msg.recipient_external_id;
           }
+          if (t && n) break;
+        }
 
-          const photo =
-            findDeep(res, "photo_link") ||
-            "https://alpha.date/static/media/profile_img_empty.0b3d6665cd1c1b51de71.jpg";
-          const nameStr = findDeep(res, "name") || "Unknown";
-          const ageStr = findDeep(res, "age") || "?";
-          s = `${nameStr}, ${ageStr}`; // Имя мужчины для файла
+        if (t) {
+          return pageFetchJson(
+            `/api/operator/myProfile?user_id=${t}&activeProfile=false`,
+            { method: "GET", headers: h },
+          ).then(({ json: res }) => {
+            if (!res) throw new Error("Пустой ответ от myProfile");
 
-          // --- УМНЫЙ ПОИСК ДАТЫ РЕГИСТРАЦИИ ---
-          const rawDate =
-            findDeep(res, "created_at") || findDeep(res, "date_created");
-          let createdStr = "—";
-          if (rawDate) {
-            let dateVal = rawDate;
-            // Защита от Unix формата (секунды vs миллисекунды)
-            if (typeof dateVal === "number" && dateVal < 10000000000)
-              dateVal *= 1000;
-            const pDate = new Date(dateVal);
-            if (!isNaN(pDate.getTime())) {
-              createdStr = pDate.toLocaleString("ru-RU", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
+            // --- УЛЬТРА-ПОИСК: Ищет значение ВЕЗДЕ в ответе сервера ---
+            function findDeep(obj, key) {
+              if (typeof obj !== "object" || obj === null) return null;
+              if (obj.hasOwnProperty(key) && obj[key] !== null && obj[key] !== "")
+                return obj[key];
+              for (let k in obj) {
+                const result = findDeep(obj[k], key);
+                if (result !== null) return result;
+              }
+              return null;
             }
-          }
 
-          // --- УМНЫЙ ПОИСК САЙТА РЕГИСТРАЦИИ ---
-          const rawSiteId = findDeep(res, "site_id");
-          const siteName = rawSiteId
-            ? ({
+            const photo =
+              findDeep(res, "photo_link") ||
+              "https://alpha.date/static/media/profile_img_empty.0b3d6665cd1c1b51de71.jpg";
+            const nameStr = findDeep(res, "name") || "Unknown";
+            const ageStr = findDeep(res, "age") || "?";
+            s = `${nameStr}, ${ageStr}`; // Имя мужчины для файла
+
+            // --- УМНЫЙ ПОИСК ДАТЫ РЕГИСТРАЦИИ ---
+            const rawDate =
+              findDeep(res, "created_at") || findDeep(res, "date_created");
+            let createdStr = "—";
+            if (rawDate) {
+              let dateVal = rawDate;
+              // Защита от Unix формата (секунды vs миллисекунды)
+              if (typeof dateVal === "number" && dateVal < 10000000000)
+                dateVal *= 1000;
+              const pDate = new Date(dateVal);
+              if (!isNaN(pDate.getTime())) {
+                createdStr = pDate.toLocaleString("ru-RU", {
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              }
+            }
+
+            // --- УМНЫЙ ПОИСК САЙТА РЕГИСТРАЦИИ ---
+            const rawSiteId = findDeep(res, "site_id");
+            const siteName = rawSiteId
+              ? ({
                 1: "SofiaDate.com",
                 2: "MySpecialDates.com",
                 5: "LoveForHeart.com",
@@ -2965,178 +3013,178 @@ function renderTools(e) {
                 16: "NikaDate.com",
                 32: "MagnoliaDate.com",
               }[rawSiteId] ?? `site_id: ${rawSiteId}`)
-            : "Скрыто сайтом";
+              : "Скрыто сайтом";
 
-          // --- ВЕРСТКА ИНТЕРФЕЙСА (ТРИ КОЛОНКИ) ---
+            // --- ВЕРСТКА ИНТЕРФЕЙСА (ТРИ КОЛОНКИ) ---
 
-          // 1. Левая колонка: МУЖЧИНА
-          const manCol = elt(
-            "div",
-            { style: "text-align:center; flex:1; font-family:'Inter',system-ui,sans-serif;" },
-            elt("img", {
-              src: photo,
-              style:
-                "width:80px; height:80px; object-fit:cover; border-radius:50%; margin-bottom:10px; border:3px solid #f1f2f6; box-shadow:0 4px 10px rgba(0,0,0,0.1)",
-            }),
-            elt(
+            // 1. Левая колонка: МУЖЧИНА
+            const manCol = elt(
               "div",
-              { style: "font-weight:800; font-size:18px; color:#2d3436" },
-              s,
-            ),
-            elt(
+              { style: "text-align:center; flex:1; font-family:'Inter',system-ui,sans-serif;" },
+              elt("img", {
+                src: photo,
+                style:
+                  "width:80px; height:80px; object-fit:cover; border-radius:50%; margin-bottom:10px; border:3px solid #f1f2f6; box-shadow:0 4px 10px rgba(0,0,0,0.1)",
+              }),
+              elt(
+                "div",
+                { style: "font-weight:800; font-size:18px; color:#2d3436" },
+                s,
+              ),
+              elt(
+                "div",
+                {
+                  style:
+                    "font-size:11px; color:#636e72; margin-top:5px; background:#f1f2f6; display:inline-block; padding:2px 8px; border-radius:10px",
+                },
+                siteName,
+              ),
+              elt(
+                "div",
+                {
+                  style:
+                    "font-size:12px; color:#00b894; margin-top:4px; font-weight:600",
+                },
+                `Рег: ${createdStr}`,
+              ),
+            );
+
+            // 2. Центральная колонка: УПРАВЛЕНИЕ
+
+            i = elt(
+              "button",
+              {
+                className: "ah-send-btn",
+                style: "width:100%;background:#0984e3;padding:10px;font-size:13px;margin-bottom:8px;font-family:'Inter',system-ui,sans-serif;border-radius:10px;",
+                onclick: () => f("chat"),
+              },
+              "💬 Скачать чат",
+            );
+
+            c = elt(
+              "button",
+              {
+                className: "ah-send-btn",
+                style: "width:100%;background:#6c5ce7;padding:10px;font-size:13px;font-family:'Inter',system-ui,sans-serif;border-radius:10px;",
+                onclick: () => f("letters"),
+              },
+              "✉️ Скачать письма",
+            );
+
+            r = elt("input", {
+              type: "datetime-local",
+              style: [
+                "width:100%;padding:8px 10px;",
+                "border:1px solid #f0f0f0;border-radius:8px;",
+                "font-family:'Inter',system-ui,sans-serif;",
+                "outline:none;font-size:12px;color:#3a3a3a;",
+                "background:#fafafa;",
+              ].join(""),
+            });
+
+            const centerCol = elt(
+              "div",
+              {
+                style: "flex:1.2;padding:0 20px;display:flex;flex-direction:column;justify-content:center;",
+              },
+              elt(
+                "label",
+                {
+                  style: [
+                    "font-size:10px;color:#c0c4cc;font-weight:700;",
+                    "text-transform:uppercase;letter-spacing:1px;",
+                    "margin-bottom:5px;display:block;",
+                    "font-family:'Inter',system-ui,sans-serif;",
+                  ].join(""),
+                },
+                "Скачать ДО даты:",
+              ),
+              r,
+              elt("div", { style: "height:15px" }),
+              i,
+              c,
+            );
+
+            a = elt(
               "div",
               {
                 style:
-                  "font-size:11px; color:#636e72; margin-top:5px; background:#f1f2f6; display:inline-block; padding:2px 8px; border-radius:10px",
+                  "text-align:center; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0.5",
               },
-              siteName,
-            ),
-            elt(
+              elt("div", { className: "spin" }, "↻"),
+              "Profile...",
+            );
+
+            const grid = elt(
               "div",
               {
                 style:
-                  "font-size:12px; color:#00b894; margin-top:4px; font-weight:600",
+                  "display:flex; align-items:flex-start; margin-top:10px; padding:20px 0",
               },
-              `Рег: ${createdStr}`,
-            ),
-          );
+              manCol,
+              centerCol,
+              a,
+            );
 
-          // 2. Центральная колонка: УПРАВЛЕНИЕ
+            d.innerHTML = "";
+            d.style.color = "#000";
+            d.style.display = "block";
+            d.style.textAlign = "left";
+            d.appendChild(grid);
 
-          i = elt(
-            "button",
-            {
-              className: "ah-send-btn",
-              style: "width:100%;background:#0984e3;padding:10px;font-size:13px;margin-bottom:8px;font-family:'Inter',system-ui,sans-serif;border-radius:10px;",
-              onclick: () => f("chat"),
-            },
-            "💬 Скачать чат",
-          );
-
-          c = elt(
-            "button",
-            {
-              className: "ah-send-btn",
-              style: "width:100%;background:#6c5ce7;padding:10px;font-size:13px;font-family:'Inter',system-ui,sans-serif;border-radius:10px;",
-              onclick: () => f("letters"),
-            },
-            "✉️ Скачать письма",
-          );
-
-          r = elt("input", {
-            type: "datetime-local",
-            style: [
-              "width:100%;padding:8px 10px;",
-              "border:1px solid #f0f0f0;border-radius:8px;",
-              "font-family:'Inter',system-ui,sans-serif;",
-              "outline:none;font-size:12px;color:#3a3a3a;",
-              "background:#fafafa;",
-            ].join(""),
-          });
-
-          const centerCol = elt(
-            "div",
-            {
-              style: "flex:1.2;padding:0 20px;display:flex;flex-direction:column;justify-content:center;",
-            },
-            elt(
-              "label",
-              {
-                style: [
-                  "font-size:10px;color:#c0c4cc;font-weight:700;",
-                  "text-transform:uppercase;letter-spacing:1px;",
-                  "margin-bottom:5px;display:block;",
-                  "font-family:'Inter',system-ui,sans-serif;",
-                ].join(""),
-              },
-              "Скачать ДО даты:",
-            ),
-            r,
-            elt("div", { style: "height:15px" }),
-            i,
-            c,
-          );
-
-          a = elt(
-            "div",
-            {
-              style:
-                "text-align:center; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; opacity:0.5",
-            },
-            elt("div", { className: "spin" }, "↻"),
-            "Profile...",
-          );
-
-          const grid = elt(
-            "div",
-            {
-              style:
-                "display:flex; align-items:flex-start; margin-top:10px; padding:20px 0",
-            },
-            manCol,
-            centerCol,
-            a,
-          );
-
-          d.innerHTML = "";
-          d.style.color = "#000";
-          d.style.display = "block";
-          d.style.textAlign = "left";
-          d.appendChild(grid);
-
-          if (n) {
-            pageFetchJson("/api/operator/profiles", {
-              method: "GET",
-              headers: h,
-            })
-              .then(({ json: profiles }) => {
-                const p = (Array.isArray(profiles) ? profiles : []).find(
-                  (prof) => String(prof.external_id) === String(n),
-                );
-                if (!p) {
-                  a.innerHTML =
-                    "<div style='font-size:12px'>Девушка не найдена</div>";
-                  return;
-                }
-
-                l = `${p.name}, ${p.age}`;
-                const pPhoto =
-                  p.photo_link ||
-                  "https://alpha.date/static/media/profile_img_empty.0b3d6665cd1c1b51de71.jpg";
-
-                a.style.opacity = 1;
-                a.replaceChildren(
-                  elt("img", {
-                    src: pPhoto,
-                    style:
-                      "width:80px; height:80px; object-fit:cover; border-radius:50%; margin-bottom:10px; border:3px solid #f1f2f6; box-shadow:0 4px 10px rgba(0,0,0,0.1)",
-                  }),
-                  elt(
-                    "div",
-                    { style: "font-weight:800; font-size:18px; color:#2d3436" },
-                    `${p.name}, ${p.age}`,
-                  ),
-                  elt(
-                    "div",
-                    { style: "font-size:12px; color:#636e72; margin-top:4px" },
-                    "Ваша анкета",
-                  ),
-                );
+            if (n) {
+              pageFetchJson("/api/operator/profiles", {
+                method: "GET",
+                headers: h,
               })
-              .catch(() => {
-                a.innerHTML = "";
-              });
-          }
-        });
-      } else {
-        d.textContent = "Не удалось определить ID мужчины.";
+                .then(({ json: profiles }) => {
+                  const p = (Array.isArray(profiles) ? profiles : []).find(
+                    (prof) => String(prof.external_id) === String(n),
+                  );
+                  if (!p) {
+                    a.innerHTML =
+                      "<div style='font-size:12px'>Девушка не найдена</div>";
+                    return;
+                  }
+
+                  l = `${p.name}, ${p.age}`;
+                  const pPhoto =
+                    p.photo_link ||
+                    "https://alpha.date/static/media/profile_img_empty.0b3d6665cd1c1b51de71.jpg";
+
+                  a.style.opacity = 1;
+                  a.replaceChildren(
+                    elt("img", {
+                      src: pPhoto,
+                      style:
+                        "width:80px; height:80px; object-fit:cover; border-radius:50%; margin-bottom:10px; border:3px solid #f1f2f6; box-shadow:0 4px 10px rgba(0,0,0,0.1)",
+                    }),
+                    elt(
+                      "div",
+                      { style: "font-weight:800; font-size:18px; color:#2d3436" },
+                      `${p.name}, ${p.age}`,
+                    ),
+                    elt(
+                      "div",
+                      { style: "font-size:12px; color:#636e72; margin-top:4px" },
+                      "Ваша анкета",
+                    ),
+                  );
+                })
+                .catch(() => {
+                  a.innerHTML = "";
+                });
+            }
+          });
+        } else {
+          d.textContent = "Не удалось определить ID мужчины.";
+          d.style.color = "#d32f2f";
+        }
+      })
+      .catch((err) => {
+        d.textContent = "Ошибка: " + err.message;
         d.style.color = "#d32f2f";
-      }
-    })
-    .catch((err) => {
-      d.textContent = "Ошибка: " + err.message;
-      d.style.color = "#d32f2f";
-    });
+      });
   } // end else (chat is open)
 
   // ====== ПРОСМОТР ЧАТА + ПИСЕМ + ПОИСК ======
@@ -3174,9 +3222,9 @@ function renderTools(e) {
       ].join(""),
       disabled: true,
     }, "🔍 Найти");
-    
+
     // НОВОЕ: Кнопки навигации по результатам
-    const navContainer = elt("div", { 
+    const navContainer = elt("div", {
       style: "display:none;align-items:center;gap:4px;",
       id: "search-nav-container"
     });
@@ -3205,7 +3253,7 @@ function renderTools(e) {
       id: "match-counter"
     }, "");
     navContainer.append(prevBtn, matchCounter, nextBtn);
-    
+
     searchRow.append(loadViewBtn, searchInput, searchBtn, navContainer);
 
     const chatViewBox = elt("div", {
@@ -3219,7 +3267,7 @@ function renderTools(e) {
     let matchedIndices = [];
 
     function escHtml(s) {
-      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
     function tsDate(obj) {
@@ -3230,21 +3278,21 @@ function renderTools(e) {
 
     function navigateSearch(direction) {
       if (matchedIndices.length === 0) return;
-      
+
       currentMatchIndex += direction;
       if (currentMatchIndex < 0) currentMatchIndex = matchedIndices.length - 1;
       if (currentMatchIndex >= matchedIndices.length) currentMatchIndex = 0;
-      
+
       // Обновляем счетчик
       const counter = document.getElementById("match-counter");
       if (counter) {
         counter.textContent = `${currentMatchIndex + 1} / ${matchedIndices.length}`;
       }
-      
+
       // Скроллим к нужному элементу
       const targetIndex = matchedIndices[currentMatchIndex];
       const allBubbles = chatViewBox.querySelectorAll('[data-msg-index]');
-      
+
       // Находим элемент с нужным индексом
       let targetBubble = null;
       allBubbles.forEach(bubble => {
@@ -3253,15 +3301,15 @@ function renderTools(e) {
           targetBubble = bubble;
         }
       });
-      
+
       if (targetBubble) {
         targetBubble.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
+
         // Подсвечиваем текущее совпадение
         allBubbles.forEach(bubble => {
           const isMatch = bubble.getAttribute('data-is-match') === 'true';
           const idx = parseInt(bubble.getAttribute('data-msg-index'));
-          
+
           if (idx === targetIndex && isMatch) {
             bubble.style.boxShadow = '0 0 0 3px rgba(var(--sa-rgb), 0.5)';
             bubble.style.transform = 'scale(1.02)';
@@ -3276,15 +3324,15 @@ function renderTools(e) {
     function renderChatView(filter = "") {
       chatViewBox.innerHTML = "";
       const q = filter.trim().toLowerCase();
-      
+
       // Сбрасываем навигацию
       currentMatchIndex = 0;
       matchedIndices = [];
-      
+
       // НОВАЯ ЛОГИКА: Если есть поиск, показываем найденные сообщения + контекст (предыдущее/следующее)
       let filtered = [];
       let filteredToOriginalMap = []; // Маппинг отфильтрованных индексов к оригинальным
-      
+
       if (q) {
         const exactMatches = new Set();
         allMessages.forEach((m, idx) => {
@@ -3295,11 +3343,11 @@ function renderTools(e) {
             if (idx < allMessages.length - 1) exactMatches.add(idx + 1); // следующее
           }
         });
-        
+
         const sortedIndices = Array.from(exactMatches).sort((a, b) => a - b);
         filtered = sortedIndices.map(i => allMessages[i]);
         filteredToOriginalMap = sortedIndices;
-        
+
         // Находим индексы точных совпадений в отфильтрованном массиве
         allMessages.forEach((m, origIdx) => {
           if ((m.text || "").toLowerCase().includes(q) || (m.author || "").toLowerCase().includes(q)) {
@@ -3309,7 +3357,7 @@ function renderTools(e) {
             }
           }
         });
-        
+
         // Показываем/скрываем навигацию
         const navContainer = document.getElementById("search-nav-container");
         const counter = document.getElementById("match-counter");
@@ -3359,20 +3407,20 @@ function renderTools(e) {
 
         const bubbleBg = m.deleted ? "#f5f5f5"
           : isLetter ? (isMe ? "#f3e8ff" : "#fffbe6")
-          : (isMe ? "#dff0fd" : "#fff");
+            : (isMe ? "#dff0fd" : "#fff");
         const bubbleBorder = m.deleted ? "#ddd"
           : isLetter ? (isMe ? "#c4b5e8" : "#e8d98c")
-          : (isMe ? "#a8d4f5" : "#eeeeee");
+            : (isMe ? "#a8d4f5" : "#eeeeee");
         const borderRadius = isMe ? "12px 12px 2px 12px" : "12px 12px 12px 2px";
 
         const timeStr = m.ts.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
         const kindBadge = isLetter
-          ? `<span style="background:${isMe?"#c4b5e8":"#e8d98c"};border-radius:3px;padding:0 4px;font-size:9px;margin-left:4px;opacity:.8;">✉</span>`
+          ? `<span style="background:${isMe ? "#c4b5e8" : "#e8d98c"};border-radius:3px;padding:0 4px;font-size:9px;margin-left:4px;opacity:.8;">✉</span>`
           : "";
 
         // Проверяем, является ли это сообщение точным совпадением
         const isExactMatch = q && matchedIndices.includes(filterIdx);
-        
+
         const bubble = elt("div", {
           style: `max-width:80%;padding:6px 10px;border-radius:${borderRadius};background:${bubbleBg};border:1px solid ${bubbleBorder};word-break:break-word;transition:box-shadow 0.3s;`,
           "data-msg-index": filterIdx, // Используем filterIdx для навигации
@@ -3476,17 +3524,25 @@ function renderTools(e) {
               if (text) allMessages.push({ ts, author: isMale ? manName : womanName, isMe: !isMale, text, kind: "chat", mediaType: null });
             } else if (mtype === "SENT_IMAGE") {
               // message_content contains the image URL
-              allMessages.push({ ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
-                mediaType: "image", mediaUrl: msg.message_content || msg.thumb_link || msg.message_thumb || "" });
+              allMessages.push({
+                ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
+                mediaType: "image", mediaUrl: msg.message_content || msg.thumb_link || msg.message_thumb || ""
+              });
             } else if (mtype === "SENT_VIDEO") {
-              allMessages.push({ ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
-                mediaType: "video", mediaUrl: msg.message_content || msg.thumb_link || msg.message_thumb || "" });
+              allMessages.push({
+                ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
+                mediaType: "video", mediaUrl: msg.message_content || msg.thumb_link || msg.message_thumb || ""
+              });
             } else if (mtype === "SENT_AUDIO") {
-              allMessages.push({ ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
-                mediaType: "audio", mediaUrl: msg.message_content || "" });
+              allMessages.push({
+                ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
+                mediaType: "audio", mediaUrl: msg.message_content || ""
+              });
             } else if (mtype.includes("DELETED") || msg.is_deleted) {
-              allMessages.push({ ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
-                mediaType: null, deleted: true });
+              allMessages.push({
+                ts, author: isMale ? manName : womanName, isMe: !isMale, text: "", kind: "chat",
+                mediaType: null, deleted: true
+              });
             }
             // SENT_IMAGE_MAIL / SENT_VIDEO_MAIL belong to letters, skip here
           }
@@ -3540,7 +3596,7 @@ function renderTools(e) {
             // Letters FROM man   = man replied (isMe = false)
             const sNameLow = sName.toLowerCase();
             const womanLow = womanName.toLowerCase();
-            const manLow   = manName.toLowerCase();
+            const manLow = manName.toLowerCase();
             let isMe;
             if (sNameLow && womanLow && sNameLow.includes(womanLow.split(",")[0]?.trim())) {
               isMe = true; // sent by woman (operator)
@@ -3578,7 +3634,7 @@ function renderTools(e) {
     };
 
     searchBtn.onclick = () => renderChatView(searchInput.value);
-    searchInput.addEventListener("keydown", (e) => { 
+    searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") renderChatView(searchInput.value);
       // Навигация стрелками вверх/вниз
       if (e.key === "ArrowUp" && matchedIndices.length > 0) {
@@ -3596,30 +3652,41 @@ function renderTools(e) {
     container.append(viewCard);
   }
 
-  // ─── Stop List + Stats ──────────────────────────────────────────────────────
+  // ─── Stop List ──────────────────────────────────────────────────────────────
 
-  const twoColRow = elt("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;" });
-
-  // Stop List — заблокированная карточка
+  // Stop List — теперь функциональный
+  const statusLabel = elt("div", { style: "text-align:right; font-size:11px; color:#b2bec3; margin-top:5px; height:15px;" }, "Автосохранение");
+  
   const stopTABg = elt("textarea", {
-    placeholder: "12345678\n87654321",
-    style: "width:100%;min-height:120px;border:1px solid #f0f0f0;border-radius:10px;padding:10px 12px;font-size:12px;font-family:'Inter',system-ui,sans-serif;resize:none;box-sizing:border-box;color:#3a3a3a;background:#fafafa;",
+    id: "ah-stop-input",
+    placeholder: "Тут впиши ID клиента",
+    value: loadStop(),
+    style: "width:100%;min-height:120px;border:1px solid #f0f0f0;border-radius:10px;padding:10px 12px;font-size:12px;font-family:'Inter',system-ui,sans-serif;resize:none;box-sizing:border-box;color:#3a3a3a;background:#fff;",
     spellcheck: false,
   });
-  stopTABg.value = "12345678\n87654321";
-  twoColRow.append(mkLockedCard("Stop List", stopTABg));
 
-  // Stats — заблокированная карточка
-  const statGridBg = elt("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:6px;" });
-  [["Инвайты","#007aff"],["Письма","#9c27b0"],["Personal","#6c5ce7"],["Ошибки","#d32f2f"]].forEach(([lbl, col]) => {
-    const b = elt("div", { style: "background:#fafafa;border:1px solid #f0f0f0;border-radius:10px;padding:12px;text-align:center;" });
-    b.append(elt("div", { style: `font-size:20px;font-weight:700;color:${col};line-height:1;font-family:'Inter',system-ui,sans-serif;` }, "0"));
-    b.append(elt("div", { style: "font-size:10px;color:#c0c4cc;margin-top:4px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;font-family:'Inter',system-ui,sans-serif;" }, lbl));
-    statGridBg.append(b);
-  });
-  twoColRow.append(mkLockedCard("Статистика", statGridBg));
+  stopTABg.oninput = (ev) => {
+    const cleanVal = ev.target.value.replace(/[^\d\s]/g, "");
+    if (cleanVal !== ev.target.value) ev.target.value = cleanVal;
+    saveStop(cleanVal);
+    
+    statusLabel.textContent = "Сохранено ✓";
+    statusLabel.style.color = "var(--sa)";
+    clearTimeout(stopTABg._timer);
+    stopTABg._timer = setTimeout(() => {
+      statusLabel.textContent = "Автосохранение";
+      statusLabel.style.color = "#b2bec3";
+    }, 1000);
+  };
 
-  container.append(twoColRow);
+  const stopCard = elt("div", { className: "ah-card", style: "margin-bottom:12px" });
+  stopCard.append(
+    elt("div", { className: "ah-card-title" }, "🛑 Стоп-лист"),
+    elt("div", { style: "font-size:12px; color:#636e72; margin-bottom:10px" }, "ID мужчин, которым бот не должен писать. Каждый с новой строки."),
+    stopTABg,
+    statusLabel
+  );
+  container.append(stopCard);
 
   // ─── Медиа + Перевод ────────────────────────────────────────────────────────
   const BK = "telescopeSettings";
@@ -3627,8 +3694,8 @@ function renderTools(e) {
 
   const mkTsToggle = (label, key) =>
     mkToggleRow(label,
-      cb => chrome.storage.local.get(TK, r => { const v = (r[TK]||{})[key]; cb(!!v); }),
-      v  => chrome.storage.local.get(TK, r => { const s=Object.assign({},r[TK]||{}); s[key]=v; chrome.storage.local.set({[TK]:s}); })
+      cb => chrome.storage.local.get(TK, r => { const v = (r[TK] || {})[key]; cb(!!v); }),
+      v => chrome.storage.local.get(TK, r => { const s = Object.assign({}, r[TK] || {}); s[key] = v; chrome.storage.local.set({ [TK]: s }); })
     );
 
   const mkSelect = (options, storageKey, subKey, defaultVal) => {
@@ -3641,17 +3708,17 @@ function renderTools(e) {
       ].join("")
     });
     options.forEach(([v, t]) => sel.append(elt("option", { value: v }, t)));
-    chrome.storage.local.get(storageKey, r => { sel.value = (r[storageKey]||{})[subKey] || defaultVal; });
+    chrome.storage.local.get(storageKey, r => { sel.value = (r[storageKey] || {})[subKey] || defaultVal; });
     sel.onchange = () => chrome.storage.local.get(storageKey, r => {
-      const s = Object.assign({}, r[storageKey]||{}); s[subKey] = sel.value; chrome.storage.local.set({[storageKey]:s});
+      const s = Object.assign({}, r[storageKey] || {}); s[subKey] = sel.value; chrome.storage.local.set({ [storageKey]: s });
     });
     return sel;
   };
 
   const LANGS = [
-    ["ru","Русский"],["en","English"],["uk","Українська"],["de","Deutsch"],
-    ["fr","Français"],["es","Español"],["ro","Română"],["bg","Български"],
-    ["kk","Қазақша"],["hi","हिन्दी"],
+    ["ru", "Русский"], ["en", "English"], ["uk", "Українська"], ["de", "Deutsch"],
+    ["fr", "Français"], ["es", "Español"], ["ro", "Română"], ["bg", "Български"],
+    ["kk", "Қазақша"], ["hi", "हिन्दी"],
   ];
 
   const mkSelectRow = (label, options, storageKey, subKey, defaultVal) => {
@@ -3676,14 +3743,14 @@ function renderTools(e) {
 
   container.append(mkCard("Перевод чата",
     mkTsToggle("Включить перевод", "translateEnabled"),
-    mkSelectRow("Режим", [["auto","Авто"],["button","По кнопке"]], TK, "translateMode", "button"),
+    mkSelectRow("Режим", [["auto", "Авто"], ["button", "По кнопке"]], TK, "translateMode", "button"),
     mkSelectRow("Язык оригинала", LANGS, TK, "translateSource", "en"),
     mkSelectRow("Язык перевода", LANGS, TK, "targetLang", "ru"),
   ));
 
   container.append(mkCard("Перевод писем",
     mkTsToggle("Включить перевод писем", "letterTranslateEnabled"),
-    mkSelectRow("Режим", [["auto","Авто"],["button","По кнопке"]], TK, "letterTranslateMode", "button"),
+    mkSelectRow("Режим", [["auto", "Авто"], ["button", "По кнопке"]], TK, "letterTranslateMode", "button"),
     mkSelectRow("Язык оригинала", LANGS, TK, "letterTranslateSource", "en"),
     mkSelectRow("Язык перевода", LANGS, TK, "letterTranslateTarget", "ru"),
   ));
@@ -3692,7 +3759,7 @@ function renderTools(e) {
   const mkEarnToggle = (label, tkKey, tkStorage) =>
     mkToggleRow(label,
       cb => chrome.storage.local.get([tkStorage], r => cb(r[tkStorage] === undefined ? true : r[tkStorage])),
-      v  => {
+      v => {
         chrome.storage.local.set({ [tkStorage]: v });
         chrome.storage.local.get(["telescopeSettings"], res => {
           const s = Object.assign({}, res.telescopeSettings || {}); s[tkKey] = v;
@@ -3761,7 +3828,7 @@ function renderTools(e) {
       s[key] = val;
       chrome.storage.local.set({ [LK]: s }, () => {
         // Синхронизируем с localStorage для доступа из модулей (page context)
-        try { localStorage.setItem("snatch_" + key, val); } catch(e) {}
+        try { localStorage.setItem("snatch_" + key, val); } catch (e) { }
         if (cb) cb();
       });
     });
@@ -3776,8 +3843,8 @@ function renderTools(e) {
   const modeWrap = elt("div", { style: "display:flex;gap:4px;background:#e2e8f0;padding:2px;border-radius:10px;" });
 
   const MODES = [
-    { key: "off",   label: "Выкл",         title: "Оригинал" },
-    { key: "nums",  label: "Цифры",        title: "Только текст" },
+    { key: "off", label: "Выкл", title: "Оригинал" },
+    { key: "nums", label: "Цифры", title: "Только текст" },
     { key: "color", label: "Цвет + Цифры", title: "Цветной текст" },
   ];
 
@@ -3815,9 +3882,9 @@ function renderTools(e) {
   colorSection.append(elt("div", { style: "font-size:11px;color:#64748b;margin-bottom:12px;font-weight:700;letter-spacing:0.5px;font-family:'Inter',system-ui,sans-serif;text-transform:uppercase;" }, "Настройка цветов"));
 
   const colorKeys = [
-    { key: "colRed",    label: "Критично", def: "#ff6b6b" },
-    { key: "colYellow", label: "Средне",   def: "#ffc947" },
-    { key: "colGreen",  label: "Норма",    def: "#26de81" },
+    { key: "colRed", label: "Критично", def: "#ff6b6b" },
+    { key: "colYellow", label: "Средне", def: "#ffc947" },
+    { key: "colGreen", label: "Норма", def: "#26de81" },
   ];
 
   const colorGrid = elt("div", { style: "display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;" });
@@ -3829,7 +3896,7 @@ function renderTools(e) {
     limGet(key, def, v => { picker.value = v; });
     picker.addEventListener("input", () => limSave(key, picker.value));
     picker.addEventListener("change", () => limSave(key, picker.value, refreshAllBars));
-    
+
     g.append(
       picker,
       elt("span", { style: "font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;" }, label)
@@ -3854,25 +3921,25 @@ function renderTools(e) {
       chrome.storage.local.get([LK], r => {
         const st = r[LK] || {};
         const mid = st[keyMid] !== undefined ? Number(st[keyMid]) : defMid;
-        const hi  = st[keyHi]  !== undefined ? Number(st[keyHi])  : defHi;
-        const cR = st.colRed    || "#ff6b6b";
+        const hi = st[keyHi] !== undefined ? Number(st[keyHi]) : defHi;
+        const cR = st.colRed || "#ff6b6b";
         const cY = st.colYellow || "#ffc947";
-        const cG = st.colGreen  || "#26de81";
+        const cG = st.colGreen || "#26de81";
         const total = isLetter ? 3 : 10;
-        const rW = isLetter ? (mid/total*100)       : ((mid-1)/total*100);
-        const yW = isLetter ? ((hi-mid)/total*100)  : ((hi-mid)/total*100);
-        const gW = 100-rW-yW;
+        const rW = isLetter ? (mid / total * 100) : ((mid - 1) / total * 100);
+        const yW = isLetter ? ((hi - mid) / total * 100) : ((hi - mid) / total * 100);
+        const gW = 100 - rW - yW;
         const mkSeg = (col, w, txt) => {
           const s = elt("div");
-          s.style.cssText = "background:"+col+";width:"+Math.max(0,w)+"%;display:flex;align-items:center;justify-content:center;transition:all .3s;font-size:10px;font-weight:700;";
+          s.style.cssText = "background:" + col + ";width:" + Math.max(0, w) + "%;display:flex;align-items:center;justify-content:center;transition:all .3s;font-size:10px;font-weight:700;";
           if (w > 12) s.textContent = txt;
           return s;
         };
         bar.innerHTML = "";
         bar.append(
-          mkSeg(cR, rW, isLetter ? "0" : "1–"+(mid-1)),
-          mkSeg(cY, yW, isLetter ? "1" : mid+"–"+(hi-1)),
-          mkSeg(cG, gW, isLetter ? "2+" : hi+"–"+total)
+          mkSeg(cR, rW, isLetter ? "0" : "1–" + (mid - 1)),
+          mkSeg(cY, yW, isLetter ? "1" : mid + "–" + (hi - 1)),
+          mkSeg(cG, gW, isLetter ? "2+" : hi + "–" + total)
         );
       });
     }
@@ -3915,8 +3982,8 @@ function renderTools(e) {
     return wrap;
   }
 
-  const chatBlock = mkThreshBlock("💬 ЧАТЫ",    "chatLimMid", "chatLimHi", 4, 7, false);
-  const letBlock  = mkThreshBlock("✉️ ПИСЬМА",  "letLimMid",  "letLimHi",  1, 2, true);
+  const chatBlock = mkThreshBlock("💬 ЧАТЫ", "chatLimMid", "chatLimHi", 4, 7, false);
+  const letBlock = mkThreshBlock("✉️ ПИСЬМА", "letLimMid", "letLimHi", 1, 2, true);
   threshSection.append(chatBlock, letBlock);
   limCard.append(threshSection);
 
@@ -3953,7 +4020,7 @@ function renderTools(e) {
           }
           setTimeout(() => lastAlertedIds.delete(manId), 300000);
         });
-      } catch(e) {}
+      } catch (e) { }
     }
     checkStopInChance();
     setInterval(checkStopInChance, 30000);
@@ -3964,9 +4031,9 @@ function renderTools(e) {
 
   const mkAhtSwitch = (label, getter, setter) =>
     mkToggleRow(label,
-      cb => chrome.storage.local.get(AHT_KEY, r => cb(getter(r[AHT_KEY]||{}))),
-      v  => chrome.storage.local.get(AHT_KEY, r => {
-        const s = Object.assign({}, r[AHT_KEY]||{}); setter(s, v); chrome.storage.local.set({[AHT_KEY]:s});
+      cb => chrome.storage.local.get(AHT_KEY, r => cb(getter(r[AHT_KEY] || {}))),
+      v => chrome.storage.local.get(AHT_KEY, r => {
+        const s = Object.assign({}, r[AHT_KEY] || {}); setter(s, v); chrome.storage.local.set({ [AHT_KEY]: s });
       })
     );
 
@@ -3977,7 +4044,7 @@ function renderTools(e) {
         const v = (r[AH_SET] || {})[key];
         cb(v !== undefined ? v : def);
       }),
-      v  => chrome.storage.local.get([AH_SET], r => {
+      v => chrome.storage.local.get([AH_SET], r => {
         const s = Object.assign({}, r[AH_SET] || {});
         s[key] = v;
         chrome.storage.local.set({ [AH_SET]: s });
@@ -3985,13 +4052,13 @@ function renderTools(e) {
     );
 
   container.append(mkCard("Snatch Функции",
-    mkAhtSwitch("Chat Credits",           s => !!(s.modules||{}).chatCredits,        (s,v) => { s.modules=Object.assign({},s.modules||{}); s.modules.chatCredits=v; }),
-    mkAhtSwitch("Local Time",             s => !!(s.modules||{}).localTime,          (s,v) => { s.modules=Object.assign({},s.modules||{}); s.modules.localTime=v; }),
-    mkAhtSwitch("Затемнение неактивных",  s => !!(s.features||{}).inactiveChatLabels,(s,v) => { s.features=Object.assign({},s.features||{}); s.features.inactiveChatLabels=v; }),
-    mkAhtSwitch("Бейдж Personal (P)",     s => !!(s.features||{}).personalBadge,     (s,v) => { s.features=Object.assign({},s.features||{}); s.features.personalBadge=v; }),
-    mkAhtSwitch("Таймер Personal",        s => !!(s.features||{}).personalTimer,     (s,v) => { s.features=Object.assign({},s.features||{}); s.features.personalTimer=v; }),
-    mkAhtSwitch("Подсветка лимита 10-2",  s => !!(s.features||{}).chatLimitHighlight,(s,v) => { s.features=Object.assign({},s.features||{}); s.features.chatLimitHighlight=v; }),
-    mkAhSwitch("Водяной знак",            "watermarkEnabled"),
+    mkAhtSwitch("Chat Credits", s => !!(s.modules || {}).chatCredits, (s, v) => { s.modules = Object.assign({}, s.modules || {}); s.modules.chatCredits = v; }),
+    mkAhtSwitch("Local Time", s => !!(s.modules || {}).localTime, (s, v) => { s.modules = Object.assign({}, s.modules || {}); s.modules.localTime = v; }),
+    mkAhtSwitch("Затемнение неактивных", s => !!(s.features || {}).inactiveChatLabels, (s, v) => { s.features = Object.assign({}, s.features || {}); s.features.inactiveChatLabels = v; }),
+    mkAhtSwitch("Бейдж Personal (P)", s => !!(s.features || {}).personalBadge, (s, v) => { s.features = Object.assign({}, s.features || {}); s.features.personalBadge = v; }),
+    mkAhtSwitch("Таймер Personal", s => !!(s.features || {}).personalTimer, (s, v) => { s.features = Object.assign({}, s.features || {}); s.features.personalTimer = v; }),
+    mkAhtSwitch("Подсветка лимита 10-2", s => !!(s.features || {}).chatLimitHighlight, (s, v) => { s.features = Object.assign({}, s.features || {}); s.features.chatLimitHighlight = v; }),
+    mkAhSwitch("Водяной знак", "watermarkEnabled"),
   ));
 
   container.append(limCard);
@@ -4245,7 +4312,7 @@ function renderStopList(e) {
   // Поле ввода
   const textArea = elt("textarea", {
     id: "ah-stop-input",
-    placeholder: "12345678\n87654321",
+    placeholder: "Тут впиши ID клиента",
     value: loadStop(),
     spellcheck: false,
   });
@@ -4625,26 +4692,26 @@ function renderInvites(e) {
     if (INV_DRAFT.img) {
       const isVid = INV_DRAFT.img.type === "video" || INV_DRAFT.img.type === "videos";
       const thumbSrc = isVid ? (INV_DRAFT.img.thumb_link || INV_DRAFT.img.thumb || INV_DRAFT.img.url) : makeThumb(INV_DRAFT.img.url);
-      
+
       const thumbContainer = elt("div", {
         style: "position:relative;display:inline-block;width:24px;height:24px;"
       });
-      
+
       const thumb = elt("img", {
         src: thumbSrc,
         style: "width:100%;height:100%;border-radius:4px;object-fit:cover;",
         loading: "lazy"
       });
-      thumb.onerror = function() { this.style.display = "none"; };
+      thumb.onerror = function () { this.style.display = "none"; };
       thumbContainer.append(thumb);
-      
+
       // Добавляем иконку play для видео
       if (isVid) {
         thumbContainer.append(elt("div", {
           style: "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);pointer-events:none;font-size:10px;color:#fff;border-radius:4px;"
         }, "▶"));
       }
-      
+
       const del = elt(
         "span",
         {
@@ -4813,17 +4880,17 @@ function renderInvites(e) {
         if (img) {
           const isVid = img.type === "video" || img.type === "videos";
           const thumbSrc = isVid ? (img.thumb_link || img.thumb || img.url) : makeThumb(img.url);
-          const imgEl = elt("img", { 
-            className: "item-thumb", 
+          const imgEl = elt("img", {
+            className: "item-thumb",
             src: thumbSrc,
             loading: "lazy",
             style: "cursor:pointer;"
           });
           // Обработка битых картинок
-          imgEl.onerror = function() {
+          imgEl.onerror = function () {
             this.style.display = "none";
           };
-          
+
           // Клик для открытия в полный размер
           imgEl.onclick = () => {
             openLightbox({
@@ -4833,20 +4900,20 @@ function renderInvites(e) {
               type: isVid ? "videos" : "images"
             });
           };
-          
+
           // Оборачиваем в контейнер для добавления иконки play
           const thumbContainer = elt("div", {
             style: "position:relative;display:inline-block;cursor:pointer;vertical-align:top;line-height:0;"
           });
           thumbContainer.append(imgEl);
-          
+
           // Добавляем иконку play для видео
           if (isVid) {
             thumbContainer.append(elt("div", {
               style: "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.25);pointer-events:none;font-size:18px;color:#fff;"
             }, "▶"));
           }
-          
+
           row.append(thumbContainer);
         }
 
@@ -5015,7 +5082,7 @@ function setStatus(e) {
   const t = document.getElementById("ah-status");
   t &&
     ((t.textContent = e ? "Бот запущен" : "Бот остановлен"),
-    (t.style.color = e ? "#4caf50" : "#d32f2f"));
+      (t.style.color = e ? "#4caf50" : "#d32f2f"));
 }
 async function toggleStart() {
   const e = $("#ah-start"),
@@ -5227,7 +5294,7 @@ function renderMediaTools(e) {
         })(),
         type: activeMediaType,
       }));
-      
+
       refreshGrid();
     });
 
@@ -5273,7 +5340,7 @@ function renderMediaTools(e) {
         };
 
         el.append(img);
-        
+
         // Иконка Play для видео
         if (item.type === "videos") {
           el.append(
@@ -5284,7 +5351,7 @@ function renderMediaTools(e) {
             ),
           );
         }
-        
+
         grid.append(el);
       });
 
@@ -5321,7 +5388,7 @@ function renderMediaTools(e) {
           selectedIds.delete(id);
           done++;
           btnDel.textContent = `Удаление... ${done}/${ids.length}`;
-        } catch(err) {
+        } catch (err) {
           console.error("deleteMedia error:", err);
         }
       }
@@ -5509,15 +5576,15 @@ function ahTimeStep(e, t) {
           : n >= 30
             ? (n += 10)
             : (n =
-                25 === n
-                  ? 30
-                  : 20 === n
-                    ? 25
-                    : 15 === n
-                      ? 20
-                      : 10 === n
-                        ? 15
-                        : 10)
+              25 === n
+                ? 30
+                : 20 === n
+                  ? 25
+                  : 15 === n
+                    ? 20
+                    : 10 === n
+                      ? 15
+                      : 10)
       : n > 60
         ? (n -= 60)
         : 60 === n
@@ -5763,9 +5830,9 @@ function openStarMenu(e) {
                   key: e.authKey,
                   opId: e.operatorId,
                 });
-              } catch (e) {}
+              } catch (e) { }
             (resetAuthUI(),
-              chrome.runtime.sendMessage({ cmd: "resetAuth" }).catch(() => {}),
+              chrome.runtime.sendMessage({ cmd: "resetAuth" }).catch(() => { }),
               n.remove(),
               buildModal());
           },
@@ -5847,7 +5914,7 @@ function openSheetImportModal() {
 
   // --- TABS ---
   const TAB_TABLE = "table";
-  const TAB_WINK  = "wink";
+  const TAB_WINK = "wink";
   let activeTab = TAB_TABLE;
 
   const tabBar = elt("div", { style: "display:flex;gap:0;border-bottom:2px solid #f1f2f6;" });
@@ -5861,7 +5928,7 @@ function openSheetImportModal() {
     return btn;
   }
   const tabTable = mkTab("📊 Таблица", TAB_TABLE);
-  const tabWink  = mkTab("💨 Импорт Винк", TAB_WINK);
+  const tabWink = mkTab("💨 Импорт Винк", TAB_WINK);
   tabBar.append(tabTable, tabWink);
 
   // --- PANELS ---
@@ -5899,7 +5966,7 @@ function openSheetImportModal() {
       try {
         const { json } = await pageFetchJson("/api/operator/profiles", { method: "GET", headers: { authorization: "Bearer " + token } });
         profiles = Array.isArray(json) ? json : [];
-      } catch(e) { log("❌ Не удалось загрузить список анкет: " + e.message, "#ff7675"); return; }
+      } catch (e) { log("❌ Не удалось загрузить список анкет: " + e.message, "#ff7675"); return; }
       const profileMap = {};
       profiles.forEach(p => { profileMap[String(p.external_id)] = p; });
       const lines = raw.split(/\r?\n/).filter(l => l.trim());
@@ -5971,7 +6038,7 @@ function openSheetImportModal() {
       try {
         const { json } = await pageFetchJson("/api/operator/profiles", { method: "GET", headers: { authorization: "Bearer " + token } });
         profiles = Array.isArray(json) ? json : [];
-      } catch(e) { log("❌ Не удалось загрузить список анкет: " + e.message, "#ff7675"); return; }
+      } catch (e) { log("❌ Не удалось загрузить список анкет: " + e.message, "#ff7675"); return; }
       const profileMap = {};
       profiles.forEach(p => { profileMap[String(p.external_id)] = p; });
 
@@ -6026,7 +6093,7 @@ function openSheetImportModal() {
       btn.style.borderBottomColor = isActive ? "var(--sa)" : "transparent";
     });
     panelTable.style.display = key === TAB_TABLE ? "flex" : "none";
-    panelWink.style.display  = key === TAB_WINK  ? "flex" : "none";
+    panelWink.style.display = key === TAB_WINK ? "flex" : "none";
   }
   switchTab(TAB_TABLE);
 
@@ -6079,14 +6146,14 @@ function waitBridgeReady(e = 2e3) {
   return AH_BRIDGE_READY
     ? Promise.resolve(!0)
     : new Promise((t) => {
-        const n = Date.now(),
-          o = () => {
-            if (AH_BRIDGE_READY || Date.now() - n >= e)
-              return t(AH_BRIDGE_READY);
-            setTimeout(o, 50);
-          };
-        o();
-      });
+      const n = Date.now(),
+        o = () => {
+          if (AH_BRIDGE_READY || Date.now() - n >= e)
+            return t(AH_BRIDGE_READY);
+          setTimeout(o, 50);
+        };
+      o();
+    });
 }
 function openPort() {
   if (!port) {
@@ -6099,11 +6166,11 @@ function openPort() {
     }
     port
       ? (port.onDisconnect.addListener(() => {
-          (chrome.runtime.lastError,
-            clearInterval(timer),
-            (port = null),
-            setTimeout(openPort, 1e3));
-        }),
+        (chrome.runtime.lastError,
+          clearInterval(timer),
+          (port = null),
+          setTimeout(openPort, 1e3));
+      }),
         (timer = setInterval(() => {
           if (port)
             try {
@@ -6125,74 +6192,74 @@ function openPort() {
       if ("resetAuth" !== e?.cmd)
         return "getPayload" === e?.cmd
           ? (buildPayload()
-              .then(({ jsonStr: e, hash: t }) => {
-                n({ ok: !0, json: e, hash: t });
-              })
-              .catch((e) => n({ ok: !1, err: String(e) })),
+            .then(({ jsonStr: e, hash: t }) => {
+              n({ ok: !0, json: e, hash: t });
+            })
+            .catch((e) => n({ ok: !1, err: String(e) })),
             !0)
           : "fetchViaPage" === e?.cmd
             ? ((async () => {
-                try {
-                  const t =
-                    "number" == typeof e.bridgeTimeout ? e.bridgeTimeout : 2e3;
-                  AH_BRIDGE_READY || (await waitBridgeReady(t));
-                  const o = "ah_" + Math.random().toString(36).slice(2),
-                    a = Math.max(500, e.timeout || 5e3),
-                    i = new Promise((e, t) => {
-                      const n = (a) => {
-                        const r = a.data;
-                        r &&
-                          "SN_PAGE" === r.src &&
-                          "SN_FETCH_RES" === r.type &&
-                          r.id === o &&
-                          (window.removeEventListener("message", n),
+              try {
+                const t =
+                  "number" == typeof e.bridgeTimeout ? e.bridgeTimeout : 2e3;
+                AH_BRIDGE_READY || (await waitBridgeReady(t));
+                const o = "ah_" + Math.random().toString(36).slice(2),
+                  a = Math.max(500, e.timeout || 5e3),
+                  i = new Promise((e, t) => {
+                    const n = (a) => {
+                      const r = a.data;
+                      r &&
+                        "SN_PAGE" === r.src &&
+                        "SN_FETCH_RES" === r.type &&
+                        r.id === o &&
+                        (window.removeEventListener("message", n),
                           clearTimeout(i),
                           r.ok
                             ? e(r)
                             : t(new Error(r.error || "page fetch failed")));
-                      };
-                      window.addEventListener("message", n);
-                      var i = setTimeout(() => {
-                        window.removeEventListener("message", n);
-                        try {
-                          window.postMessage(
-                            { src: "SN_SW", type: "SN_FETCH_CANCEL", id: o },
-                            location.origin,
-                          );
-                        } catch {}
-                        t(new Error("timeout"));
-                      }, a);
-                    });
-                  window.postMessage(
-                    {
-                      src: "SN_SW",
-                      type: "SN_FETCH_REQ",
-                      id: o,
-                      path: e.path,
-                      method: e.method || "GET",
-                      headers: e.headers || {},
-                      bodyBase64: e.bodyBase64 || null,
-                      timeoutMs: a,
-                      referer: e.referer || null,
-                    },
-                    location.origin,
-                  );
-                  const r = await i;
-                  n({
-                    ok: !0,
-                    status: r.status,
-                    headers: r.headers,
-                    bodyBase64: r.bodyBase64,
+                    };
+                    window.addEventListener("message", n);
+                    var i = setTimeout(() => {
+                      window.removeEventListener("message", n);
+                      try {
+                        window.postMessage(
+                          { src: "SN_SW", type: "SN_FETCH_CANCEL", id: o },
+                          location.origin,
+                        );
+                      } catch { }
+                      t(new Error("timeout"));
+                    }, a);
                   });
-                } catch (e) {
-                  n({ ok: !1, error: String((e && e.message) || e) });
-                }
-              })(),
+                window.postMessage(
+                  {
+                    src: "SN_SW",
+                    type: "SN_FETCH_REQ",
+                    id: o,
+                    path: e.path,
+                    method: e.method || "GET",
+                    headers: e.headers || {},
+                    bodyBase64: e.bodyBase64 || null,
+                    timeoutMs: a,
+                    referer: e.referer || null,
+                  },
+                  location.origin,
+                );
+                const r = await i;
+                n({
+                  ok: !0,
+                  status: r.status,
+                  headers: r.headers,
+                  bodyBase64: r.bodyBase64,
+                });
+              } catch (e) {
+                n({ ok: !1, error: String((e && e.message) || e) });
+              }
+            })(),
               !0)
             : void (
-                "SN_ping" !== e?.cmd ||
-                n({ ok: !0, bridge: !0 === AH_BRIDGE_READY })
-              );
+              "SN_ping" !== e?.cmd ||
+              n({ ok: !0, bridge: !0 === AH_BRIDGE_READY })
+            );
       resetAuthUI();
     } else buildModal();
   else
@@ -6249,21 +6316,41 @@ function renderSettings(container) {
   function getManIdFromUrl() {
     // alpha.date/chat/12345 или ?man_id=12345 или /dialogs/12345
     const m = location.href.match(/\/(?:chat|dialogs|profile)\/(\d+)/i) ||
-              location.search.match(/[?&](?:man_id|user_id|id)=(\d+)/);
+      location.search.match(/[?&](?:man_id|user_id|id)=(\d+)/);
     return m ? m[1] : null;
+  }
+
+  function updateBtnState(btn, manId) {
+    if (!manId) return;
+    const stopStr = AH_STORE.mem.stop || "";
+    // Используем тот же фильтр, что и при сохранении
+    const ids = stopStr.split(/\s+/).filter(v => v && v !== "null");
+    const isInStop = ids.includes(String(manId));
+
+    if (isInStop) {
+      btn.textContent = "✅ Стоп";
+      btn.title = "Удалить из стоп-листа";
+      btn.style.background = "var(--sa)"; // Зеленый
+    } else {
+      btn.textContent = "🛑 Стоп";
+      btn.title = "Добавить в стоп-лист";
+      btn.style.background = "#ff7675"; // Красный
+    }
+    btn._manId = manId;
   }
 
   function addStopBtn(header) {
     if (header.getAttribute(ATTR)) return;
     header.setAttribute(ATTR, "1");
 
+    const manId = getManIdFromUrl();
+    if (!manId) return;
+
     const btn = document.createElement("button");
-    btn.textContent = "🛑 Стоп";
-    btn.title = "Добавить мужчину в стоп-лист";
+    btn.className = "ah-stop-header-btn"; // Добавляем класс для поиска
     Object.assign(btn.style, {
       marginLeft: "8px",
       padding: "4px 10px",
-      background: "#ff7675",
       color: "#fff",
       border: "none",
       borderRadius: "6px",
@@ -6274,24 +6361,34 @@ function renderSettings(container) {
       flexShrink: "0",
     });
 
-    btn.addEventListener("click", () => {
-      const manId = getManIdFromUrl();
-      if (!manId) {
-        alert("Не удалось определить ID мужчины из URL.\nОткройте чат напрямую.");
-        return;
-      }
+    updateBtnState(btn, manId);
+
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
       const current = (AH_STORE.mem.stop || "").trim();
-      const ids = current ? current.split(/\s+/) : [];
-      if (ids.includes(manId)) {
-        alert("ID " + manId + " уже в стоп-листе.");
-        return;
+      let ids = current ? current.split(/\s+/).filter(v => v && v !== "null") : [];
+      const isIn = ids.includes(manId);
+
+      if (isIn) {
+        // Удаляем
+        ids = ids.filter(id => id !== manId);
+      } else {
+        // Добавляем
+        ids.push(manId);
       }
-      ids.push(manId);
+
       const newStop = ids.join("\n");
       saveStop(newStop);
-      btn.textContent = "✅ Добавлен";
-      btn.style.background = "var(--sa)";
-      setTimeout(() => { btn.textContent = "🛑 Стоп"; btn.style.background = "#ff7675"; }, 2000);
+      
+      // Обновляем UI textarea, если она открыта
+      const stopInput = document.getElementById("ah-stop-input");
+      if (stopInput) {
+        stopInput.value = newStop;
+      }
+      
+      updateBtnState(btn, manId);
     });
 
     // Добавляем кнопку в конец заголовка
@@ -6299,6 +6396,18 @@ function renderSettings(container) {
     header.style.alignItems = header.style.alignItems || "center";
     header.appendChild(btn);
   }
+
+  // Следим за изменениями стоп-листа в хранилище, чтобы обновить кнопки на странице
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[AH_STORE_KEYS.stop]) {
+      // Даем AH_STORE.mem.stop время обновиться (обработчик в начале файла делает это)
+      setTimeout(() => {
+        document.querySelectorAll(".ah-stop-header-btn").forEach(btn => {
+          if (btn._manId) updateBtnState(btn, btn._manId);
+        });
+      }, 50);
+    }
+  });
 
   function scanHeaders() {
     document.querySelectorAll(SELECTOR_CHAT_HEADER).forEach(addStopBtn);
@@ -6313,674 +6422,674 @@ function renderSettings(container) {
 // ═══════════════════════════════════════════════════════════
 // EARNINGS PANEL: шестерёнка → Tools, бейдж → тема
 // ═══════════════════════════════════════════════════════════════════════════
-  // 4. CONTENT EARNINGS PANEL (день / UTC, статистика, история) — как inject ContentEarningsPanel
-  // ═══════════════════════════════════════════════════════════════════════════
+// 4. CONTENT EARNINGS PANEL (день / UTC, статистика, история) — как inject ContentEarningsPanel
+// ═══════════════════════════════════════════════════════════════════════════
 
-  const EARNINGS_HISTORY_LIMIT = 50;
-  const EARNINGS_DEFAULT_SETTINGS = {
-    interval: 10,
-    fade: 10,
-    rows: 10,
-    noMsg: false,
-    noStk: false,
-    hideHdr: false,
-    hideStats: false,
-  };
-  const EARNINGS_LABELS = {
-    SENT_TEXT: "Сообщения",
-    SENT_MAIL: "Отправлено письмо",
-    SENT_IMAGE: "Отправлено фото",
-    READ_MAIL: "Прочитано письмо",
-    SENT_STICKER: "Стикеры",
-    SENT_AUDIO: "Отправлено аудио",
-    SENT_VIDEO: "Отправлено видео",
-    SENT_IMAGE_MAIL: "Отправлено фото (письмо)",
-    SENT_VIRTUAL_GIFT: "Отправлен подарок",
-    GET_IMAGE_MAIL: "Входящее фото (письмо)",
-    GET_AUDIO: "Входящее аудио",
-    GET_AUDIO_MAIL: "Входящее аудио (письмо)",
-    SENT_AUDIO_MAIL: "Отправлено аудио (письмо)",
-    GET_VIDEO: "Входящее видео",
-    GET_VIDEO_MAIL: "Входящее видео (письмо)",
-    SENT_VIDEO_MAIL: "Отправлено видео (письмо)",
-    MAKE_ORDER_APPROVE: "Подтверждение заказа",
-    GET_VIDEO_SHOW: "Видео шоу",
-    GET_CONTACT_APPROVE: "Подтверждение контакта",
-    APPRECIATION: "Поощрение",
-    total: "ВСЕГО",
-  };
+const EARNINGS_HISTORY_LIMIT = 50;
+const EARNINGS_DEFAULT_SETTINGS = {
+  interval: 10,
+  fade: 10,
+  rows: 10,
+  noMsg: false,
+  noStk: false,
+  hideHdr: false,
+  hideStats: false,
+};
+const EARNINGS_LABELS = {
+  SENT_TEXT: "Сообщения",
+  SENT_MAIL: "Отправлено письмо",
+  SENT_IMAGE: "Отправлено фото",
+  READ_MAIL: "Прочитано письмо",
+  SENT_STICKER: "Стикеры",
+  SENT_AUDIO: "Отправлено аудио",
+  SENT_VIDEO: "Отправлено видео",
+  SENT_IMAGE_MAIL: "Отправлено фото (письмо)",
+  SENT_VIRTUAL_GIFT: "Отправлен подарок",
+  GET_IMAGE_MAIL: "Входящее фото (письмо)",
+  GET_AUDIO: "Входящее аудио",
+  GET_AUDIO_MAIL: "Входящее аудио (письмо)",
+  SENT_AUDIO_MAIL: "Отправлено аудио (письмо)",
+  GET_VIDEO: "Входящее видео",
+  GET_VIDEO_MAIL: "Входящее видео (письмо)",
+  SENT_VIDEO_MAIL: "Отправлено видео (письмо)",
+  MAKE_ORDER_APPROVE: "Подтверждение заказа",
+  GET_VIDEO_SHOW: "Видео шоу",
+  GET_CONTACT_APPROVE: "Подтверждение контакта",
+  APPRECIATION: "Поощрение",
+  total: "ВСЕГО",
+};
 
-  function earningsFindAutoToken() {
-    const keys = ["token", "access_token", "auth", "user_token", "api_token"];
-    for (let i = 0; i < keys.length; i++) {
-      try {
-        const v = localStorage.getItem(keys[i]);
-        if (v && String(v).trim().startsWith("eyJ")) return String(v).trim();
-      } catch (e) {}
-    }
-    return "";
+function earningsFindAutoToken() {
+  const keys = ["token", "access_token", "auth", "user_token", "api_token"];
+  for (let i = 0; i < keys.length; i++) {
+    try {
+      const v = localStorage.getItem(keys[i]);
+      if (v && String(v).trim().startsWith("eyJ")) return String(v).trim();
+    } catch (e) { }
+  }
+  return "";
+}
+
+function earningsFmtUtc(d) {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return y + "-" + m + "-" + day;
+}
+
+class ContentEarningsPanelWidget {
+  constructor() {
+    this.root = null;
+    this.mountParent = null;
+    this.telescopeSettings = null;
+    this.panelSettings = Object.assign({}, EARNINGS_DEFAULT_SETTINGS);
+    this.history = [];
+    this.prevStats = {};
+    this.isFirstRun = true;
+    this.total = 0;
+    this.currentDateDisplay = "";
+    this.stats = [];
+    this.mountTimer = null;
+    this.fetchTimer = null;
+    this.anchorObserver = null;
+    this.diffTimer = null;
+    this.diffToastTimer = null;
+    this.els = {};
+    this.init();
   }
 
-  function earningsFmtUtc(d) {
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(d.getUTCDate()).padStart(2, "0");
-    return y + "-" + m + "-" + day;
-  }
-
-  class ContentEarningsPanelWidget {
-    constructor() {
-      this.root = null;
-      this.mountParent = null;
-      this.telescopeSettings = null;
-      this.panelSettings = Object.assign({}, EARNINGS_DEFAULT_SETTINGS);
-      this.history = [];
-      this.prevStats = {};
-      this.isFirstRun = true;
-      this.total = 0;
-      this.currentDateDisplay = "";
-      this.stats = [];
-      this.mountTimer = null;
-      this.fetchTimer = null;
-      this.anchorObserver = null;
-      this.diffTimer = null;
-      this.diffToastTimer = null;
-      this.els = {};
-      this.init();
-    }
-
-    init() {
-      try {
-        chrome.storage.local.get(
-          ["telescopeSettings", "contentEarningsSettings", "earningsHistory"],
-          (r) => {
-            this.telescopeSettings = r.telescopeSettings || {};
-            this.panelSettings = Object.assign(
-              {},
-              EARNINGS_DEFAULT_SETTINGS,
-              r.contentEarningsSettings || {},
-            );
-            if (Array.isArray(r.earningsHistory)) this.history = r.earningsHistory;
-            if (this.telescopeSettings.showBalanceWidget !== false) {
-              this.startMountLoop();
-            }
-          },
-        );
-
-        chrome.storage.onChanged.addListener((changes, area) => {
-          if (area !== "local") return;
-          if (changes.telescopeSettings) {
-            this.telescopeSettings = changes.telescopeSettings.newValue || {};
-            if (this.telescopeSettings.showBalanceWidget === false) {
-              this.destroy();
-            } else {
-              this.startMountLoop();
-            }
+  init() {
+    try {
+      chrome.storage.local.get(
+        ["telescopeSettings", "contentEarningsSettings", "earningsHistory"],
+        (r) => {
+          this.telescopeSettings = r.telescopeSettings || {};
+          this.panelSettings = Object.assign(
+            {},
+            EARNINGS_DEFAULT_SETTINGS,
+            r.contentEarningsSettings || {},
+          );
+          if (Array.isArray(r.earningsHistory)) this.history = r.earningsHistory;
+          if (this.telescopeSettings.showBalanceWidget !== false) {
+            this.startMountLoop();
           }
-          if (changes.contentEarningsSettings && this.root) {
-            this.panelSettings = Object.assign(
-              {},
-              EARNINGS_DEFAULT_SETTINGS,
-              changes.contentEarningsSettings.newValue || {},
-            );
-            this.syncSettingsPanel();
-            this.renderStats();
-            this.renderHistory();
+        },
+      );
+
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== "local") return;
+        if (changes.telescopeSettings) {
+          this.telescopeSettings = changes.telescopeSettings.newValue || {};
+          if (this.telescopeSettings.showBalanceWidget === false) {
+            this.destroy();
+          } else {
+            this.startMountLoop();
           }
-          if (changes.earningsHistory && this.root) {
-            this.history = Array.isArray(changes.earningsHistory.newValue)
-              ? changes.earningsHistory.newValue
-              : [];
-            this.renderHistory();
-          }
-        });
-      } catch (e) {
-        console.error("[EarningsPanel] Init error:", e);
-      }
-    }
-
-    getMountTarget() {
-      // Ищем контейнер напрямую (тот же селектор что в inject.js)
-      return document.querySelector('[class^="Paid_clmn_4_block_list"]') || null;
-    }
-
-    persistPanelSettings() {
-      try {
-        chrome.storage.local.set({
-          contentEarningsSettings: this.panelSettings,
-        });
-      } catch (e) {}
-    }
-
-    persistHistory() {
-      try {
-        const trimmed = this.history.slice(0, EARNINGS_HISTORY_LIMIT);
-        this.history = trimmed;
-        chrome.storage.local.set({ earningsHistory: trimmed });
-      } catch (e) {}
-    }
-
-    startMountLoop() {
-      if (this.mountTimer || this.root) return;
-      this.mountTimer = setInterval(() => {
-        const t = this.getMountTarget();
-        if (!t) return;
-        clearInterval(this.mountTimer);
-        this.mountTimer = null;
-        this.mountParent = t;
-        this.buildUi();
-        this.ensurePosition();
-        this.anchorObserver = new MutationObserver(() => this.ensurePosition());
-        this.anchorObserver.observe(document.body, {
-          childList: true,
-          subtree: true,
-        });
-        const ms = Math.max(5, Number(this.panelSettings.interval) || 10) * 1000;
-        this.tickFetch();
-        this.fetchTimer = setInterval(() => this.tickFetch(), ms);
-      }, 500);
-    }
-
-    ensurePosition() {
-      const target = this.getMountTarget();
-      if (!target || !this.root) return;
-      this.mountParent = target;
-
-      // Используем портал inject.js как стабильную точку привязки
-      const portal = document.querySelector('.ah-earnings-portal');
-      if (portal && portal.parentElement === target) {
-        // Вставляем перед порталом; portal.previousSibling проверка предотвращает повторные вставки
-        if (portal.previousSibling !== this.root) {
-          target.insertBefore(this.root, portal);
         }
-      } else if (!target.contains(this.root)) {
-        // Портала нет — вставляем только если виджет вообще не в контейнере
-        target.insertBefore(this.root, target.firstChild);
-      }
+        if (changes.contentEarningsSettings && this.root) {
+          this.panelSettings = Object.assign(
+            {},
+            EARNINGS_DEFAULT_SETTINGS,
+            changes.contentEarningsSettings.newValue || {},
+          );
+          this.syncSettingsPanel();
+          this.renderStats();
+          this.renderHistory();
+        }
+        if (changes.earningsHistory && this.root) {
+          this.history = Array.isArray(changes.earningsHistory.newValue)
+            ? changes.earningsHistory.newValue
+            : [];
+          this.renderHistory();
+        }
+      });
+    } catch (e) {
+      console.error("[EarningsPanel] Init error:", e);
     }
+  }
 
-    destroy() {
-      if (this.mountTimer) {
-        clearInterval(this.mountTimer);
-        this.mountTimer = null;
+  getMountTarget() {
+    // Ищем контейнер напрямую (тот же селектор что в inject.js)
+    return document.querySelector('[class^="Paid_clmn_4_block_list"]') || null;
+  }
+
+  persistPanelSettings() {
+    try {
+      chrome.storage.local.set({
+        contentEarningsSettings: this.panelSettings,
+      });
+    } catch (e) { }
+  }
+
+  persistHistory() {
+    try {
+      const trimmed = this.history.slice(0, EARNINGS_HISTORY_LIMIT);
+      this.history = trimmed;
+      chrome.storage.local.set({ earningsHistory: trimmed });
+    } catch (e) { }
+  }
+
+  startMountLoop() {
+    if (this.mountTimer || this.root) return;
+    this.mountTimer = setInterval(() => {
+      const t = this.getMountTarget();
+      if (!t) return;
+      clearInterval(this.mountTimer);
+      this.mountTimer = null;
+      this.mountParent = t;
+      this.buildUi();
+      this.ensurePosition();
+      this.anchorObserver = new MutationObserver(() => this.ensurePosition());
+      this.anchorObserver.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+      const ms = Math.max(5, Number(this.panelSettings.interval) || 10) * 1000;
+      this.tickFetch();
+      this.fetchTimer = setInterval(() => this.tickFetch(), ms);
+    }, 500);
+  }
+
+  ensurePosition() {
+    const target = this.getMountTarget();
+    if (!target || !this.root) return;
+    this.mountParent = target;
+
+    // Используем портал inject.js как стабильную точку привязки
+    const portal = document.querySelector('.ah-earnings-portal');
+    if (portal && portal.parentElement === target) {
+      // Вставляем перед порталом; portal.previousSibling проверка предотвращает повторные вставки
+      if (portal.previousSibling !== this.root) {
+        target.insertBefore(this.root, portal);
       }
-      if (this.fetchTimer) {
-        clearInterval(this.fetchTimer);
-        this.fetchTimer = null;
-      }
-      if (this.anchorObserver) {
-        try {
-          this.anchorObserver.disconnect();
-        } catch (e) {}
-        this.anchorObserver = null;
-      }
-      if (this.diffTimer) {
-        clearTimeout(this.diffTimer);
-        this.diffTimer = null;
-      }
-      if (this.diffToastTimer) {
-        clearTimeout(this.diffToastTimer);
-        this.diffToastTimer = null;
-      }
-      if (this.root && this.root.parentNode) {
-        try {
-          this.root.remove();
-        } catch (e) {}
-      }
-      this.root = null;
-      this.mountParent = null;
+    } else if (!target.contains(this.root)) {
+      // Портала нет — вставляем только если виджет вообще не в контейнере
+      target.insertBefore(this.root, target.firstChild);
     }
+  }
 
-    ensureEarningsStyles() {
-      if (document.getElementById("sn-earnings-styles")) return;
-      const st = document.createElement("style");
-      st.id = "sn-earnings-styles";
-      st.textContent =
-        "#sn-content-earnings.sne-earn{box-sizing:border-box;width:100%;max-width:100%;" +
-        "margin:0 0 12px;padding:0;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;" +
-        "font-size:13px;color:#171717;-webkit-font-smoothing:antialiased;}" +
-        "#sn-content-earnings .sne-earn__inner{position:relative;background:#fafafa;" +
-        "border:1px solid #e8e8e8;border-radius:14px;padding:14px 14px 12px;" +
-        "box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px -12px rgba(0,0,0,.08);}" +
-        "#sn-content-earnings .sne-earn__toast{overflow:hidden;max-height:0;opacity:0;" +
-        "margin:0;padding:0 2px;border-radius:10px;background:linear-gradient(120deg,#ecfdf5,#f0fdf4);" +
-        "border:1px solid rgba(5,150,105,.22);box-shadow:0 2px 12px -2px rgba(5,150,105,.2);" +
-        "display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;" +
-        "font-size:12px;font-weight:500;color:#065f46;letter-spacing:.01em;" +
-        "transition:max-height .42s cubic-bezier(.4,0,.2,1),opacity .32s ease," +
-        "margin .42s cubic-bezier(.4,0,.2,1),padding .42s cubic-bezier(.4,0,.2,1);" +
-        "pointer-events:none;}" +
-        "#sn-content-earnings .sne-earn__toast--open{max-height:56px;opacity:1;margin:0 0 12px;" +
-        "padding:9px 12px;}" +
-        "#sn-content-earnings .sne-earn__toast-amt{font-variant-numeric:tabular-nums;" +
-        "font-weight:700;font-size:13px;color:#047857;}" +
-        "#sn-content-earnings .sne-earn__toast-dot{opacity:.45;font-weight:300;}" +
-        "#sn-content-earnings .sne-earn__toast-lbl{opacity:.92;font-weight:500;}" +
-        "#sn-content-earnings .sne-earn__head{display:flex;justify-content:space-between;" +
-        "align-items:flex-start;gap:10px;margin-bottom:2px;}" +
-        "#sn-content-earnings .sne-earn__title{min-width:0;flex:1;}" +
-        "#sn-content-earnings #sne-total{font-variant-numeric:tabular-nums;font-weight:600;" +
-        "font-size:20px;line-height:1.15;letter-spacing:-.03em;color:#0a0a0a;}" +
-        "#sn-content-earnings #sne-date{margin-top:4px;font-size:11px;color:#737373;" +
-        "letter-spacing:.04em;}" +
-        "#sn-content-earnings .sne-earn__actions{display:flex;gap:2px;flex-shrink:0;" +
-        "padding-top:2px;}" +
-        "#sn-content-earnings .sne-earn__iconbtn{display:inline-flex;align-items:center;" +
-        "justify-content:center;width:32px;height:32px;margin:0;padding:0;border:none;" +
-        "border-radius:9px;background:transparent;color:#525252;cursor:pointer;" +
-        "transition:background .15s ease,color .15s ease;}" +
-        "#sn-content-earnings .sne-earn__iconbtn:hover{background:#ececec;color:#171717;}" +
-        "#sn-content-earnings .sne-earn__iconbtn:active{transform:scale(.96);}" +
-        "#sn-content-earnings #sne-settings{display:none;margin-top:4px;margin-bottom:10px;" +
-        "padding:10px 12px;background:#fff;border:1px solid #ebebeb;border-radius:10px;}" +
-        "#sn-content-earnings #sne-settings.is-open{display:block;}" +
-        "#sn-content-earnings #sne-rows{width:52px;padding:6px 9px;font-size:12px;" +
-        "border:1px solid #e5e5e5;border-radius:8px;background:#fff;color:#171717;" +
-        "outline:none;transition:border-color .15s;}" +
-        "#sn-content-earnings #sne-rows:focus{border-color:#a3a3a3;}" +
-        "#sn-content-earnings #sne-stats-wrap{margin-top:2px;}" +
-        "#sn-content-earnings .sne-earn__statrow{display:flex;gap:10px;align-items:baseline;" +
-        "padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:12px;line-height:1.35;}" +
-        "#sn-content-earnings .sne-earn__statrow:last-child{border-bottom:none;padding-bottom:0;}" +
-        "#sn-content-earnings .sne-earn__stat-amt{min-width:60px;text-align:left;" +
-        "font-variant-numeric:tabular-nums;font-weight:600;font-size:12px;color:#047857;}" +
-        "#sn-content-earnings .sne-earn__stat-lbl{flex:1;color:#404040;}" +
-        "#sn-content-earnings .sne-earn__hist{margin-top:10px;padding-top:10px;" +
-        "border-top:1px solid #ededed;}" +
-        "#sn-content-earnings .sne-earn__histcap{font-size:10px;font-weight:600;" +
-        "letter-spacing:.12em;text-transform:uppercase;color:#a3a3a3;margin:0 0 8px;}" +
-        "#sn-content-earnings .sne-earn__histrow{display:flex;justify-content:space-between;" +
-        "align-items:baseline;gap:8px;padding:2px 0;font-size:12px;}" +
-        "#sn-content-earnings .sne-earn__hist-amt{font-variant-numeric:tabular-nums;" +
-        "font-weight:600;color:#059669;flex-shrink:0;min-width:48px;}" +
-        "#sn-content-earnings .sne-earn__hist-mid{display:flex;gap:6px;align-items:baseline;" +
-        "min-width:0;flex:1;}" +
-        "#sn-content-earnings .sne-earn__hist-lbl{color:#525252;white-space:nowrap;" +
-        "overflow:hidden;text-overflow:ellipsis;}" +
-        "#sn-content-earnings .sne-earn__hist-time{font-size:11px;color:#a3a3a3;" +
-        "font-variant-numeric:tabular-nums;flex-shrink:0;}" +
-        "#sn-content-earnings #sne-rows{font-variant-numeric:tabular-nums;}" +
-        "#sn-content-earnings .sne-earn__setrow{display:flex;justify-content:space-between;" +
-        "align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:#525252;}" +
-        "#sn-content-earnings .sne-earn__setlab{display:flex;align-items:center;gap:10px;" +
-        "font-size:12px;color:#525252;}" +
-        "#sn-content-earnings #sne-clear{font-size:11px;padding:6px 12px;border-radius:8px;" +
-        "border:1px solid #fecaca;background:#fff;color:#b91c1c;cursor:pointer;" +
-        "transition:background .15s,border-color .15s;}" +
-        "#sn-content-earnings #sne-clear:hover{background:#fef2f2;border-color:#f87171;}";
-      (document.head || document.documentElement).appendChild(st);
+  destroy() {
+    if (this.mountTimer) {
+      clearInterval(this.mountTimer);
+      this.mountTimer = null;
     }
+    if (this.fetchTimer) {
+      clearInterval(this.fetchTimer);
+      this.fetchTimer = null;
+    }
+    if (this.anchorObserver) {
+      try {
+        this.anchorObserver.disconnect();
+      } catch (e) { }
+      this.anchorObserver = null;
+    }
+    if (this.diffTimer) {
+      clearTimeout(this.diffTimer);
+      this.diffTimer = null;
+    }
+    if (this.diffToastTimer) {
+      clearTimeout(this.diffToastTimer);
+      this.diffToastTimer = null;
+    }
+    if (this.root && this.root.parentNode) {
+      try {
+        this.root.remove();
+      } catch (e) { }
+    }
+    this.root = null;
+    this.mountParent = null;
+  }
 
-    buildUi() {
-      if (this.root) return;
-      this.ensureEarningsStyles();
-      const w = document.createElement("div");
-      w.id = "sn-content-earnings";
-      w.className = "sne-earn";
-      w.setAttribute("data-snatch-widget", "true");
+  ensureEarningsStyles() {
+    if (document.getElementById("sn-earnings-styles")) return;
+    const st = document.createElement("style");
+    st.id = "sn-earnings-styles";
+    st.textContent =
+      "#sn-content-earnings.sne-earn{box-sizing:border-box;width:100%;max-width:100%;" +
+      "margin:0 0 12px;padding:0;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;" +
+      "font-size:13px;color:#171717;-webkit-font-smoothing:antialiased;}" +
+      "#sn-content-earnings .sne-earn__inner{position:relative;background:#fafafa;" +
+      "border:1px solid #e8e8e8;border-radius:14px;padding:14px 14px 12px;" +
+      "box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px -12px rgba(0,0,0,.08);}" +
+      "#sn-content-earnings .sne-earn__toast{overflow:hidden;max-height:0;opacity:0;" +
+      "margin:0;padding:0 2px;border-radius:10px;background:linear-gradient(120deg,#ecfdf5,#f0fdf4);" +
+      "border:1px solid rgba(5,150,105,.22);box-shadow:0 2px 12px -2px rgba(5,150,105,.2);" +
+      "display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;" +
+      "font-size:12px;font-weight:500;color:#065f46;letter-spacing:.01em;" +
+      "transition:max-height .42s cubic-bezier(.4,0,.2,1),opacity .32s ease," +
+      "margin .42s cubic-bezier(.4,0,.2,1),padding .42s cubic-bezier(.4,0,.2,1);" +
+      "pointer-events:none;}" +
+      "#sn-content-earnings .sne-earn__toast--open{max-height:56px;opacity:1;margin:0 0 12px;" +
+      "padding:9px 12px;}" +
+      "#sn-content-earnings .sne-earn__toast-amt{font-variant-numeric:tabular-nums;" +
+      "font-weight:700;font-size:13px;color:#047857;}" +
+      "#sn-content-earnings .sne-earn__toast-dot{opacity:.45;font-weight:300;}" +
+      "#sn-content-earnings .sne-earn__toast-lbl{opacity:.92;font-weight:500;}" +
+      "#sn-content-earnings .sne-earn__head{display:flex;justify-content:space-between;" +
+      "align-items:flex-start;gap:10px;margin-bottom:2px;}" +
+      "#sn-content-earnings .sne-earn__title{min-width:0;flex:1;}" +
+      "#sn-content-earnings #sne-total{font-variant-numeric:tabular-nums;font-weight:600;" +
+      "font-size:20px;line-height:1.15;letter-spacing:-.03em;color:#0a0a0a;}" +
+      "#sn-content-earnings #sne-date{margin-top:4px;font-size:11px;color:#737373;" +
+      "letter-spacing:.04em;}" +
+      "#sn-content-earnings .sne-earn__actions{display:flex;gap:2px;flex-shrink:0;" +
+      "padding-top:2px;}" +
+      "#sn-content-earnings .sne-earn__iconbtn{display:inline-flex;align-items:center;" +
+      "justify-content:center;width:32px;height:32px;margin:0;padding:0;border:none;" +
+      "border-radius:9px;background:transparent;color:#525252;cursor:pointer;" +
+      "transition:background .15s ease,color .15s ease;}" +
+      "#sn-content-earnings .sne-earn__iconbtn:hover{background:#ececec;color:#171717;}" +
+      "#sn-content-earnings .sne-earn__iconbtn:active{transform:scale(.96);}" +
+      "#sn-content-earnings #sne-settings{display:none;margin-top:4px;margin-bottom:10px;" +
+      "padding:10px 12px;background:#fff;border:1px solid #ebebeb;border-radius:10px;}" +
+      "#sn-content-earnings #sne-settings.is-open{display:block;}" +
+      "#sn-content-earnings #sne-rows{width:52px;padding:6px 9px;font-size:12px;" +
+      "border:1px solid #e5e5e5;border-radius:8px;background:#fff;color:#171717;" +
+      "outline:none;transition:border-color .15s;}" +
+      "#sn-content-earnings #sne-rows:focus{border-color:#a3a3a3;}" +
+      "#sn-content-earnings #sne-stats-wrap{margin-top:2px;}" +
+      "#sn-content-earnings .sne-earn__statrow{display:flex;gap:10px;align-items:baseline;" +
+      "padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:12px;line-height:1.35;}" +
+      "#sn-content-earnings .sne-earn__statrow:last-child{border-bottom:none;padding-bottom:0;}" +
+      "#sn-content-earnings .sne-earn__stat-amt{min-width:60px;text-align:left;" +
+      "font-variant-numeric:tabular-nums;font-weight:600;font-size:12px;color:#047857;}" +
+      "#sn-content-earnings .sne-earn__stat-lbl{flex:1;color:#404040;}" +
+      "#sn-content-earnings .sne-earn__hist{margin-top:10px;padding-top:10px;" +
+      "border-top:1px solid #ededed;}" +
+      "#sn-content-earnings .sne-earn__histcap{font-size:10px;font-weight:600;" +
+      "letter-spacing:.12em;text-transform:uppercase;color:#a3a3a3;margin:0 0 8px;}" +
+      "#sn-content-earnings .sne-earn__histrow{display:flex;justify-content:space-between;" +
+      "align-items:baseline;gap:8px;padding:2px 0;font-size:12px;}" +
+      "#sn-content-earnings .sne-earn__hist-amt{font-variant-numeric:tabular-nums;" +
+      "font-weight:600;color:#059669;flex-shrink:0;min-width:48px;}" +
+      "#sn-content-earnings .sne-earn__hist-mid{display:flex;gap:6px;align-items:baseline;" +
+      "min-width:0;flex:1;}" +
+      "#sn-content-earnings .sne-earn__hist-lbl{color:#525252;white-space:nowrap;" +
+      "overflow:hidden;text-overflow:ellipsis;}" +
+      "#sn-content-earnings .sne-earn__hist-time{font-size:11px;color:#a3a3a3;" +
+      "font-variant-numeric:tabular-nums;flex-shrink:0;}" +
+      "#sn-content-earnings #sne-rows{font-variant-numeric:tabular-nums;}" +
+      "#sn-content-earnings .sne-earn__setrow{display:flex;justify-content:space-between;" +
+      "align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:#525252;}" +
+      "#sn-content-earnings .sne-earn__setlab{display:flex;align-items:center;gap:10px;" +
+      "font-size:12px;color:#525252;}" +
+      "#sn-content-earnings #sne-clear{font-size:11px;padding:6px 12px;border-radius:8px;" +
+      "border:1px solid #fecaca;background:#fff;color:#b91c1c;cursor:pointer;" +
+      "transition:background .15s,border-color .15s;}" +
+      "#sn-content-earnings #sne-clear:hover{background:#fef2f2;border-color:#f87171;}";
+    (document.head || document.documentElement).appendChild(st);
+  }
 
-      w.innerHTML =
-        '<div class="sne-earn__inner">' +
-        '<div id="sne-diff" class="sne-earn__toast" role="status" aria-live="polite"></div>' +
-        '<div class="sne-earn__head">' +
-        '<div class="sne-earn__title">' +
-        '<div id="sne-total">$0.00</div>' +
-        '<div id="sne-date">—</div></div>' +
-        '<div class="sne-earn__actions">' +
-        '<button type="button" class="sne-earn__iconbtn" id="sne-toggle-stats" aria-label="Статистика" title="Статистика">' +
-        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/></svg></button>' +
-        '<button type="button" class="sne-earn__iconbtn" id="sne-toggle-settings" aria-label="Настройки" title="Настройки">' +
-        '<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M14,7.77 L14,6.17 L12.06,5.53 L11.61,4.44 L12.49,2.6 L11.36,1.47 L9.55,2.38 L8.46,1.93 L7.77,0.01 L6.17,0.01 L5.54,1.95 L4.43,2.4 L2.59,1.52 L1.46,2.65 L2.37,4.46 L1.92,5.55 L0,6.23 L0,7.82 L1.94,8.46 L2.39,9.55 L1.51,11.39 L2.64,12.52 L4.45,11.61 L5.54,12.06 L6.23,13.98 L7.82,13.98 L8.45,12.04 L9.56,11.59 L11.4,12.47 L12.53,11.34 L11.61,9.53 L12.08,8.44 L14,7.75 L14,7.77 Z M7,10 C5.34,10 4,8.66 4,7 C4,5.34 5.34,4 7,4 C8.66,4 10,5.34 10,7 C10,8.66 8.66,10 7,10 Z"/></svg></button>' +
-        "</div></div>" +
-        '<div id="sne-settings"></div>' +
-        '<div id="sne-stats-wrap"></div>' +
-        '<div id="sne-history-outer"></div></div>';
+  buildUi() {
+    if (this.root) return;
+    this.ensureEarningsStyles();
+    const w = document.createElement("div");
+    w.id = "sn-content-earnings";
+    w.className = "sne-earn";
+    w.setAttribute("data-snatch-widget", "true");
 
-      this.root = w;
-      this.els.total = w.querySelector("#sne-total");
-      this.els.date = w.querySelector("#sne-date");
-      this.els.diff = w.querySelector("#sne-diff");
-      this.els.statsWrap = w.querySelector("#sne-stats-wrap");
-      this.els.historyOuter = w.querySelector("#sne-history-outer");
-      this.els.settings = w.querySelector("#sne-settings");
-      w.querySelector("#sne-toggle-stats").onclick = () => this.onToggleStats();
-      w.querySelector("#sne-toggle-settings").onclick = () => this.onToggleSettings();
-      this.buildSettingsPanel();
-      this.mountParent.insertBefore(w, this.mountParent.firstChild);
-      this.updateChevronIcon();
-      this.renderStats();
+    w.innerHTML =
+      '<div class="sne-earn__inner">' +
+      '<div id="sne-diff" class="sne-earn__toast" role="status" aria-live="polite"></div>' +
+      '<div class="sne-earn__head">' +
+      '<div class="sne-earn__title">' +
+      '<div id="sne-total">$0.00</div>' +
+      '<div id="sne-date">—</div></div>' +
+      '<div class="sne-earn__actions">' +
+      '<button type="button" class="sne-earn__iconbtn" id="sne-toggle-stats" aria-label="Статистика" title="Статистика">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/></svg></button>' +
+      '<button type="button" class="sne-earn__iconbtn" id="sne-toggle-settings" aria-label="Настройки" title="Настройки">' +
+      '<svg width="16" height="16" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M14,7.77 L14,6.17 L12.06,5.53 L11.61,4.44 L12.49,2.6 L11.36,1.47 L9.55,2.38 L8.46,1.93 L7.77,0.01 L6.17,0.01 L5.54,1.95 L4.43,2.4 L2.59,1.52 L1.46,2.65 L2.37,4.46 L1.92,5.55 L0,6.23 L0,7.82 L1.94,8.46 L2.39,9.55 L1.51,11.39 L2.64,12.52 L4.45,11.61 L5.54,12.06 L6.23,13.98 L7.82,13.98 L8.45,12.04 L9.56,11.59 L11.4,12.47 L12.53,11.34 L11.61,9.53 L12.08,8.44 L14,7.75 L14,7.77 Z M7,10 C5.34,10 4,8.66 4,7 C4,5.34 5.34,4 7,4 C8.66,4 10,5.34 10,7 C10,8.66 8.66,10 7,10 Z"/></svg></button>' +
+      "</div></div>" +
+      '<div id="sne-settings"></div>' +
+      '<div id="sne-stats-wrap"></div>' +
+      '<div id="sne-history-outer"></div></div>';
+
+    this.root = w;
+    this.els.total = w.querySelector("#sne-total");
+    this.els.date = w.querySelector("#sne-date");
+    this.els.diff = w.querySelector("#sne-diff");
+    this.els.statsWrap = w.querySelector("#sne-stats-wrap");
+    this.els.historyOuter = w.querySelector("#sne-history-outer");
+    this.els.settings = w.querySelector("#sne-settings");
+    w.querySelector("#sne-toggle-stats").onclick = () => this.onToggleStats();
+    w.querySelector("#sne-toggle-settings").onclick = () => this.onToggleSettings();
+    this.buildSettingsPanel();
+    this.mountParent.insertBefore(w, this.mountParent.firstChild);
+    this.updateChevronIcon();
+    this.renderStats();
+    this.renderHistory();
+  }
+
+  buildSettingsPanel() {
+    const s = this.els.settings;
+    if (!s) return;
+    s.innerHTML =
+      '<div class="sne-earn__setrow">' +
+      '<label class="sne-earn__setlab">Строк истории' +
+      '<input id="sne-rows" type="number" min="1" max="50" /></label>' +
+      '<button type="button" id="sne-clear">Очистить историю</button></div>';
+    s.style.display = "none";
+    s.classList.remove("is-open");
+    const inp = s.querySelector("#sne-rows");
+    inp.value = String(
+      Math.min(50, Math.max(1, Number(this.panelSettings.rows) || 10)),
+    );
+    inp.onchange = () => {
+      let v = parseInt(inp.value, 10) || 10;
+      if (v > 50) v = 50;
+      if (v < 1) v = 1;
+      this.panelSettings.rows = v;
+      this.persistPanelSettings();
       this.renderHistory();
-    }
+    };
+    s.querySelector("#sne-clear").onclick = () => {
+      this.history = [];
+      this.persistHistory();
+      this.renderHistory();
+    };
+  }
 
-    buildSettingsPanel() {
-      const s = this.els.settings;
-      if (!s) return;
-      s.innerHTML =
-        '<div class="sne-earn__setrow">' +
-        '<label class="sne-earn__setlab">Строк истории' +
-        '<input id="sne-rows" type="number" min="1" max="50" /></label>' +
-        '<button type="button" id="sne-clear">Очистить историю</button></div>';
-      s.style.display = "none";
-      s.classList.remove("is-open");
-      const inp = s.querySelector("#sne-rows");
+  syncSettingsPanel() {
+    const inp = this.root && this.root.querySelector("#sne-rows");
+    if (inp)
       inp.value = String(
         Math.min(50, Math.max(1, Number(this.panelSettings.rows) || 10)),
       );
-      inp.onchange = () => {
-        let v = parseInt(inp.value, 10) || 10;
-        if (v > 50) v = 50;
-        if (v < 1) v = 1;
-        this.panelSettings.rows = v;
-        this.persistPanelSettings();
-        this.renderHistory();
-      };
-      s.querySelector("#sne-clear").onclick = () => {
-        this.history = [];
-        this.persistHistory();
-        this.renderHistory();
-      };
+  }
+
+  onToggleStats() {
+    this.panelSettings.hideStats = !this.panelSettings.hideStats;
+    this.persistPanelSettings();
+    this.updateChevronIcon();
+    this.renderStats();
+  }
+
+  onToggleSettings() {
+    const open = this.els.settings.classList.contains("is-open");
+    if (open) {
+      this.els.settings.style.display = "none";
+      this.els.settings.classList.remove("is-open");
+    } else {
+      this.els.settings.style.display = "block";
+      this.els.settings.classList.add("is-open");
     }
-
-    syncSettingsPanel() {
-      const inp = this.root && this.root.querySelector("#sne-rows");
-      if (inp)
-        inp.value = String(
-          Math.min(50, Math.max(1, Number(this.panelSettings.rows) || 10)),
-        );
+    const btn = this.root.querySelector("#sne-toggle-settings");
+    if (btn) {
+      btn.innerHTML = open
+        ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M14,7.77 L14,6.17 L12.06,5.53 L11.61,4.44 L12.49,2.6 L11.36,1.47 L9.55,2.38 L8.46,1.93 L7.77,0.01 L6.17,0.01 L5.54,1.95 L4.43,2.4 L2.59,1.52 L1.46,2.65 L2.37,4.46 L1.92,5.55 L0,6.23 L0,7.82 L1.94,8.46 L2.39,9.55 L1.51,11.39 L2.64,12.52 L4.45,11.61 L5.54,12.06 L6.23,13.98 L7.82,13.98 L8.45,12.04 L9.56,11.59 L11.4,12.47 L12.53,11.34 L11.61,9.53 L12.08,8.44 L14,7.75 L14,7.77 Z M7,10 C5.34,10 4,8.66 4,7 C4,5.34 5.34,4 7,4 C8.66,4 10,5.34 10,7 C10,8.66 8.66,10 7,10 Z"/></svg>'
+        : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M.439,21.44a1.5,1.5,0,0,0,2.122,2.121L11.823,14.3a.25.25,0,0,1,.354,0l9.262,9.263a1.5,1.5,0,1,0,2.122-2.121L14.3,12.177a.25.25,0,0,1,0-.354l9.263-9.262A1.5,1.5,0,0,0,21.439.44L12.177,9.7a.25.25,0,0,1-.354,0L2.561.44A1.5,1.5,0,0,0,.439,2.561L9.7,11.823a.25.25,0,0,1,0,.354Z"/></svg>';
     }
+  }
 
-    onToggleStats() {
-      this.panelSettings.hideStats = !this.panelSettings.hideStats;
-      this.persistPanelSettings();
-      this.updateChevronIcon();
-      this.renderStats();
+  updateChevronIcon() {
+    const btn = this.root && this.root.querySelector("#sne-toggle-stats");
+    if (!btn) return;
+    const up = !this.panelSettings.hideStats;
+    btn.innerHTML = up
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>';
+  }
+
+  showDiffBadge(amount, label) {
+    const el = this.els.diff;
+    if (!el) return;
+    if (this.diffTimer) clearTimeout(this.diffTimer);
+    if (this.diffToastTimer) clearTimeout(this.diffToastTimer);
+    el.innerHTML =
+      '<span class="sne-earn__toast-amt">+$' +
+      amount.toFixed(2) +
+      "</span>" +
+      (label
+        ? '<span class="sne-earn__toast-dot" aria-hidden="true">·</span><span class="sne-earn__toast-lbl">' +
+        this.esc(label) +
+        "</span>"
+        : "");
+    el.classList.add("sne-earn__toast--open");
+    const sec = Math.max(1, Number(this.panelSettings.fade) || 10);
+    const totalMs = Math.max(1800, sec * 1000);
+    const fadeMs = 400;
+    this.diffTimer = setTimeout(() => {
+      el.classList.remove("sne-earn__toast--open");
+      this.diffToastTimer = setTimeout(() => {
+        el.innerHTML = "";
+        this.diffToastTimer = null;
+      }, fadeMs);
+    }, Math.max(0, totalMs - fadeMs));
+  }
+
+  renderStats() {
+    if (!this.els.statsWrap) return;
+    if (this.panelSettings.hideStats) {
+      this.els.statsWrap.innerHTML = "";
+      this.els.statsWrap.style.display = "none";
+      return;
     }
-
-    onToggleSettings() {
-      const open = this.els.settings.classList.contains("is-open");
-      if (open) {
-        this.els.settings.style.display = "none";
-        this.els.settings.classList.remove("is-open");
-      } else {
-        this.els.settings.style.display = "block";
-        this.els.settings.classList.add("is-open");
-      }
-      const btn = this.root.querySelector("#sne-toggle-settings");
-      if (btn) {
-        btn.innerHTML = open
-          ? '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M14,7.77 L14,6.17 L12.06,5.53 L11.61,4.44 L12.49,2.6 L11.36,1.47 L9.55,2.38 L8.46,1.93 L7.77,0.01 L6.17,0.01 L5.54,1.95 L4.43,2.4 L2.59,1.52 L1.46,2.65 L2.37,4.46 L1.92,5.55 L0,6.23 L0,7.82 L1.94,8.46 L2.39,9.55 L1.51,11.39 L2.64,12.52 L4.45,11.61 L5.54,12.06 L6.23,13.98 L7.82,13.98 L8.45,12.04 L9.56,11.59 L11.4,12.47 L12.53,11.34 L11.61,9.53 L12.08,8.44 L14,7.75 L14,7.77 Z M7,10 C5.34,10 4,8.66 4,7 C4,5.34 5.34,4 7,4 C8.66,4 10,5.34 10,7 C10,8.66 8.66,10 7,10 Z"/></svg>'
-          : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M.439,21.44a1.5,1.5,0,0,0,2.122,2.121L11.823,14.3a.25.25,0,0,1,.354,0l9.262,9.263a1.5,1.5,0,1,0,2.122-2.121L14.3,12.177a.25.25,0,0,1,0-.354l9.263-9.262A1.5,1.5,0,0,0,21.439.44L12.177,9.7a.25.25,0,0,1-.354,0L2.561.44A1.5,1.5,0,0,0,.439,2.561L9.7,11.823a.25.25,0,0,1,0,.354Z"/></svg>';
-      }
+    this.els.statsWrap.style.display = "block";
+    if (!this.stats.length) {
+      this.els.statsWrap.innerHTML = "";
+      return;
     }
+    const rows = this.stats
+      .map(
+        (item) =>
+          '<div class="sne-earn__statrow">' +
+          '<span class="sne-earn__stat-amt">$' +
+          item.amount.toFixed(2) +
+          "</span>" +
+          '<span class="sne-earn__stat-lbl">' +
+          this.esc(item.label) +
+          "</span></div>",
+      )
+      .join("");
+    this.els.statsWrap.innerHTML = rows;
+  }
 
-    updateChevronIcon() {
-      const btn = this.root && this.root.querySelector("#sne-toggle-stats");
-      if (!btn) return;
-      const up = !this.panelSettings.hideStats;
-      btn.innerHTML = up
-        ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z"/></svg>'
-        : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>';
+  renderHistory() {
+    if (!this.els.historyOuter) return;
+    const rows = Math.min(
+      this.history.length,
+      Math.max(1, Number(this.panelSettings.rows) || 10),
+    );
+    if (!this.history.length) {
+      this.els.historyOuter.innerHTML = "";
+      return;
     }
+    const list = this.history
+      .slice(0, rows)
+      .map(
+        (item) =>
+          '<div class="sne-earn__histrow">' +
+          '<div class="sne-earn__hist-mid">' +
+          '<span class="sne-earn__hist-amt">+' +
+          Number(item.amount).toFixed(2) +
+          "</span>" +
+          '<span class="sne-earn__hist-lbl">' +
+          this.esc(item.label) +
+          "</span></div>" +
+          '<span class="sne-earn__hist-time">' +
+          this.esc(item.time) +
+          "</span></div>",
+      )
+      .join("");
+    this.els.historyOuter.innerHTML =
+      '<div class="sne-earn__hist">' +
+      '<p class="sne-earn__histcap">История (' +
+      rows +
+      ")</p>" +
+      "<div>" +
+      list +
+      "</div></div>";
+  }
 
-    showDiffBadge(amount, label) {
-      const el = this.els.diff;
-      if (!el) return;
-      if (this.diffTimer) clearTimeout(this.diffTimer);
-      if (this.diffToastTimer) clearTimeout(this.diffToastTimer);
-      el.innerHTML =
-        '<span class="sne-earn__toast-amt">+$' +
-        amount.toFixed(2) +
-        "</span>" +
-        (label
-          ? '<span class="sne-earn__toast-dot" aria-hidden="true">·</span><span class="sne-earn__toast-lbl">' +
-            this.esc(label) +
-            "</span>"
-          : "");
-      el.classList.add("sne-earn__toast--open");
-      const sec = Math.max(1, Number(this.panelSettings.fade) || 10);
-      const totalMs = Math.max(1800, sec * 1000);
-      const fadeMs = 400;
-      this.diffTimer = setTimeout(() => {
-        el.classList.remove("sne-earn__toast--open");
-        this.diffToastTimer = setTimeout(() => {
-          el.innerHTML = "";
-          this.diffToastTimer = null;
-        }, fadeMs);
-      }, Math.max(0, totalMs - fadeMs));
+  esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  updateHeader() {
+    if (this.els.total)
+      this.els.total.textContent = "$" + this.total.toFixed(2);
+    if (this.els.date) this.els.date.textContent = this.currentDateDisplay;
+  }
+
+  async tickFetch() {
+    if (!this.root) return;
+    const token = earningsFindAutoToken();
+    if (!token) {
+      if (this.els.total) this.els.total.textContent = "—";
+      if (this.els.date) this.els.date.textContent = "Нет JWT (перезайдите)";
+      return;
     }
+    try {
+      await waitBridgeReady(4e3);
+    } catch (e) { }
 
-    renderStats() {
-      if (!this.els.statsWrap) return;
-      if (this.panelSettings.hideStats) {
-        this.els.statsWrap.innerHTML = "";
-        this.els.statsWrap.style.display = "none";
-        return;
-      }
-      this.els.statsWrap.style.display = "block";
-      if (!this.stats.length) {
-        this.els.statsWrap.innerHTML = "";
-        return;
-      }
-      const rows = this.stats
-        .map(
-          (item) =>
-            '<div class="sne-earn__statrow">' +
-            '<span class="sne-earn__stat-amt">$' +
-            item.amount.toFixed(2) +
-            "</span>" +
-            '<span class="sne-earn__stat-lbl">' +
-            this.esc(item.label) +
-            "</span></div>",
-        )
-        .join("");
-      this.els.statsWrap.innerHTML = rows;
-    }
+    const now = new Date();
+    const todayStr = earningsFmtUtc(now);
+    this.currentDateDisplay = todayStr + " (UTC)";
 
-    renderHistory() {
-      if (!this.els.historyOuter) return;
-      const rows = Math.min(
-        this.history.length,
-        Math.max(1, Number(this.panelSettings.rows) || 10),
-      );
-      if (!this.history.length) {
-        this.els.historyOuter.innerHTML = "";
-        return;
-      }
-      const list = this.history
-        .slice(0, rows)
-        .map(
-          (item) =>
-            '<div class="sne-earn__histrow">' +
-            '<div class="sne-earn__hist-mid">' +
-            '<span class="sne-earn__hist-amt">+' +
-            Number(item.amount).toFixed(2) +
-            "</span>" +
-            '<span class="sne-earn__hist-lbl">' +
-            this.esc(item.label) +
-            "</span></div>" +
-            '<span class="sne-earn__hist-time">' +
-            this.esc(item.time) +
-            "</span></div>",
-        )
-        .join("");
-      this.els.historyOuter.innerHTML =
-        '<div class="sne-earn__hist">' +
-        '<p class="sne-earn__histcap">История (' +
-        rows +
-        ")</p>" +
-        "<div>" +
-        list +
-        "</div></div>";
-    }
+    const past = new Date(now.getTime());
+    past.setUTCDate(now.getUTCDate() - 1);
+    const dateFrom = earningsFmtUtc(past);
 
-    esc(s) {
-      return String(s == null ? "" : s)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-    }
+    const path =
+      "/api/statistic/profileActionGrouped?date_from=" +
+      encodeURIComponent(dateFrom) +
+      "&date_to=" +
+      encodeURIComponent(todayStr);
 
-    updateHeader() {
-      if (this.els.total)
-        this.els.total.textContent = "$" + this.total.toFixed(2);
-      if (this.els.date) this.els.date.textContent = this.currentDateDisplay;
-    }
+    try {
+      const { json: data } = await pageFetchJson(path, {
+        method: "GET",
+        headers: {
+          Authorization: "Bearer " + token,
+          Accept: "application/json",
+        },
+        timeout: 12e3,
+      });
 
-    async tickFetch() {
-      if (!this.root) return;
-      const token = earningsFindAutoToken();
-      if (!token) {
-        if (this.els.total) this.els.total.textContent = "—";
-        if (this.els.date) this.els.date.textContent = "Нет JWT (перезайдите)";
-        return;
-      }
-      try {
-        await waitBridgeReady(4e3);
-      } catch (e) {}
+      if (!data || !Array.isArray(data.response)) return;
 
-      const now = new Date();
-      const todayStr = earningsFmtUtc(now);
-      this.currentDateDisplay = todayStr + " (UTC)";
+      let targetStats = data.response.find(function (item) {
+        return item && item.date === todayStr;
+      });
+      if (!targetStats) targetStats = { total: "0.00" };
 
-      const past = new Date(now.getTime());
-      past.setUTCDate(now.getUTCDate() - 1);
-      const dateFrom = earningsFmtUtc(past);
+      const currentTotal = parseFloat(targetStats.total || 0);
+      if (isNaN(currentTotal)) return;
 
-      const path =
-        "/api/statistic/profileActionGrouped?date_from=" +
-        encodeURIComponent(dateFrom) +
-        "&date_to=" +
-        encodeURIComponent(todayStr);
+      this.total = currentTotal;
 
-      try {
-        const { json: data } = await pageFetchJson(path, {
-          method: "GET",
-          headers: {
-            Authorization: "Bearer " + token,
-            Accept: "application/json",
-          },
-          timeout: 12e3,
+      if (!this.isFirstRun) {
+        const prevStats = this.prevStats;
+        let foundDiff = false;
+        const newHistoryItems = [];
+        const timeString = new Date().toLocaleTimeString("ru-RU", {
+          hour: "2-digit",
+          minute: "2-digit",
         });
 
-        if (!data || !Array.isArray(data.response)) return;
-
-        let targetStats = data.response.find(function (item) {
-          return item && item.date === todayStr;
-        });
-        if (!targetStats) targetStats = { total: "0.00" };
-
-        const currentTotal = parseFloat(targetStats.total || 0);
-        if (isNaN(currentTotal)) return;
-
-        this.total = currentTotal;
-
-        if (!this.isFirstRun) {
-          const prevStats = this.prevStats;
-          let foundDiff = false;
-          const newHistoryItems = [];
-          const timeString = new Date().toLocaleTimeString("ru-RU", {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-
-          Object.keys(targetStats).forEach((key) => {
-            if (key === "date" || key === "total") return;
-            const currentVal = parseFloat(targetStats[key] || 0);
-            const prevVal = parseFloat(prevStats[key] || 0);
-            if (currentVal > prevVal) {
-              const difference = currentVal - prevVal;
-              this.showDiffBadge(difference, EARNINGS_LABELS[key] || key);
-              foundDiff = true;
-              newHistoryItems.push({
-                amount: difference,
-                label: EARNINGS_LABELS[key] || key,
-                time: timeString,
-                id: Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-' + key,
-              });
-            }
-          });
-
-          if (newHistoryItems.length) {
-            // Фильтруем дубликаты по содержимому (amount + label + time)
-            const uniqueNewItems = newHistoryItems.filter(newItem => {
-              return !this.history.some(existingItem => 
-                existingItem.amount === newItem.amount &&
-                existingItem.label === newItem.label &&
-                existingItem.time === newItem.time
-              );
-            });
-            
-            if (uniqueNewItems.length > 0) {
-              this.history = uniqueNewItems.concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
-              this.persistHistory();
-              this.renderHistory();
-            }
-          }
-
-          if (
-            !foundDiff &&
-            prevStats.total != null &&
-            currentTotal > parseFloat(prevStats.total)
-          ) {
-            const diff = currentTotal - parseFloat(prevStats.total);
-            this.showDiffBadge(diff, null);
-            
-            const newItem = {
-              amount: diff,
-              label: "Разное",
+        Object.keys(targetStats).forEach((key) => {
+          if (key === "date" || key === "total") return;
+          const currentVal = parseFloat(targetStats[key] || 0);
+          const prevVal = parseFloat(prevStats[key] || 0);
+          if (currentVal > prevVal) {
+            const difference = currentVal - prevVal;
+            this.showDiffBadge(difference, EARNINGS_LABELS[key] || key);
+            foundDiff = true;
+            newHistoryItems.push({
+              amount: difference,
+              label: EARNINGS_LABELS[key] || key,
               time: timeString,
-              id: Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-misc',
-            };
-            
-            // Проверяем дубликат по содержимому
-            const isDuplicate = this.history.some(existingItem =>
+              id: Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-' + key,
+            });
+          }
+        });
+
+        if (newHistoryItems.length) {
+          // Фильтруем дубликаты по содержимому (amount + label + time)
+          const uniqueNewItems = newHistoryItems.filter(newItem => {
+            return !this.history.some(existingItem =>
               existingItem.amount === newItem.amount &&
               existingItem.label === newItem.label &&
               existingItem.time === newItem.time
             );
-            
-            if (!isDuplicate) {
-              this.history = [newItem].concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
-              this.persistHistory();
-              this.renderHistory();
-            }
+          });
+
+          if (uniqueNewItems.length > 0) {
+            this.history = uniqueNewItems.concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
+            this.persistHistory();
+            this.renderHistory();
           }
         }
 
-        this.prevStats = targetStats;
-        this.isFirstRun = false;
+        if (
+          !foundDiff &&
+          prevStats.total != null &&
+          currentTotal > parseFloat(prevStats.total)
+        ) {
+          const diff = currentTotal - parseFloat(prevStats.total);
+          this.showDiffBadge(diff, null);
 
-        this.stats = Object.keys(targetStats)
-          .filter(function (key) {
-            return (
-              key !== "date" &&
-              key !== "total" &&
-              parseFloat(targetStats[key] || 0) > 0
-            );
-          })
-          .map(function (key) {
-            return {
-              label: EARNINGS_LABELS[key] || key,
-              amount: parseFloat(targetStats[key] || 0),
-            };
-          })
-          .sort(function (a, b) {
-            return b.amount - a.amount;
-          });
+          const newItem = {
+            amount: diff,
+            label: "Разное",
+            time: timeString,
+            id: Date.now() + '-' + Math.random().toString(36).substr(2, 9) + '-misc',
+          };
 
-        this.updateHeader();
-        this.renderStats();
-        this.renderHistory();
-      } catch (err) {
-        console.error("[EarningsPanel] fetch:", err);
+          // Проверяем дубликат по содержимому
+          const isDuplicate = this.history.some(existingItem =>
+            existingItem.amount === newItem.amount &&
+            existingItem.label === newItem.label &&
+            existingItem.time === newItem.time
+          );
+
+          if (!isDuplicate) {
+            this.history = [newItem].concat(this.history).slice(0, EARNINGS_HISTORY_LIMIT);
+            this.persistHistory();
+            this.renderHistory();
+          }
+        }
       }
+
+      this.prevStats = targetStats;
+      this.isFirstRun = false;
+
+      this.stats = Object.keys(targetStats)
+        .filter(function (key) {
+          return (
+            key !== "date" &&
+            key !== "total" &&
+            parseFloat(targetStats[key] || 0) > 0
+          );
+        })
+        .map(function (key) {
+          return {
+            label: EARNINGS_LABELS[key] || key,
+            amount: parseFloat(targetStats[key] || 0),
+          };
+        })
+        .sort(function (a, b) {
+          return b.amount - a.amount;
+        });
+
+      this.updateHeader();
+      this.renderStats();
+      this.renderHistory();
+    } catch (err) {
+      console.error("[EarningsPanel] fetch:", err);
     }
   }
+}
 
-  // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 
-  
+
 // ═══════════════════════════════════════════════════════════
 // DIALOGS COUNTER (SnatchOne custom)
 // ═══════════════════════════════════════════════════════════
@@ -7014,30 +7123,30 @@ function renderSettings(container) {
 
   function updateDialogsCounter() {
     chrome.storage.local.get(['snDialogsFound', 'snLastStatsTime', 'ahRunning'], r => {
-      const n       = r.snDialogsFound  || 0;
-      const lastTs  = r.snLastStatsTime || 0;
-      const running = r.ahRunning       === true;
+      const n = r.snDialogsFound || 0;
+      const lastTs = r.snLastStatsTime || 0;
+      const running = r.ahRunning === true;
       // Сервер считается живым если STATS пришёл менее 30 сек назад
-      const alive   = running && (Date.now() - lastTs < 30000);
+      const alive = running && (Date.now() - lastTs < 30000);
 
       document.querySelectorAll('.sn-dialogs-counter').forEach(counter => {
         const dot = counter.querySelector('.sn-dialogs-dot');
         const num = counter.querySelector('.sn-dialogs-num');
         if (dot) {
-          dot.style.color      = alive ? '#27ae60' : '#ccc';
+          dot.style.color = alive ? '#27ae60' : '#ccc';
           dot.style.textShadow = alive ? '0 0 6px rgba(39,174,96,.6)' : 'none';
-          dot.title            = alive ? 'Сервер работает' : 'Сервер не активен';
+          dot.title = alive ? 'Сервер работает' : 'Сервер не активен';
         }
         if (num) {
-          num.textContent  = n > 0 ? String(n) : '—';
-          num.style.color  = n > 0 ? 'var(--sa, #6c5ce7)' : '#aaa';
+          num.textContent = n > 0 ? String(n) : '—';
+          num.style.color = n > 0 ? 'var(--sa, #6c5ce7)' : '#aaa';
           num.style.fontWeight = n > 0 ? '600' : '400';
         }
       });
     });
   }
 
-  
+
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && ("snDialogsFound" in changes || "ahRunning" in changes || "snLastStatsTime" in changes)) {
       updateDialogsCounter();
@@ -7061,11 +7170,11 @@ if (document.readyState === "loading") {
 // ═══════════════════════════════════════════════════════════
 (function initChatLimitsRefresh() {
   const STORAGE_KEY = "ADB_chat_limits_v1";
-  const CHANNEL     = "adb-invites";
+  const CHANNEL = "adb-invites";
   const INTERVAL_MS = 30_000; // каждые 30 секунд
 
   let bc = null;
-  try { bc = new BroadcastChannel(CHANNEL); } catch {}
+  try { bc = new BroadcastChannel(CHANNEL); } catch { }
 
   async function fetchAndUpdateLimits() {
     const token = localStorage.getItem("token");
@@ -7094,7 +7203,7 @@ if (document.readyState === "loading") {
 
       // Читаем текущий кэш
       let cache = {};
-      try { cache = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch {}
+      try { cache = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"); } catch { }
 
       const now = Date.now();
       let changed = false;
@@ -7119,7 +7228,7 @@ if (document.readyState === "loading") {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cache));
 
       // Также шлём через BroadcastChannel
-      try { bc?.postMessage({ type: "chat-limits", ts: now, src: "snatch-refresh" }); } catch {}
+      try { bc?.postMessage({ type: "chat-limits", ts: now, src: "snatch-refresh" }); } catch { }
 
     } catch { /* тихо */ }
   }

@@ -35,13 +35,109 @@ const CONSTANTS = {
 
 const crypto = require("crypto");
 const path = require("path");
+const fs = require("fs"); // Для логирования
+
+process.on("uncaughtException", (err) => {
+  console.error("💥 КРИТИЧЕСКАЯ ОШИБКА (Поток упал):", err.message);
+  console.error(err.stack);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("🔋 НЕОБРАБОТАННЫЙ ПРОМИС:", reason);
+});
+
+// ================= НАСТРОЙКИ ЛОГИРОВАНИЯ =================
+const logsDir = path.join(__dirname, "logs");
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
+
+function getLogStream() {
+  const dateStr = new Date().toISOString().split("T")[0];
+  const logFilePath = path.join(logsDir, `${dateStr}.log`);
+  return fs.createWriteStream(logFilePath, { flags: "a" });
+}
+
+// ── OPERATOR LOG: отдельная папка/файл для каждого оператора ──
+function getOperatorLogStream(operatorName) {
+  if (!operatorName) return null;
+  // Очищаем имя оператора от спецсимволов для безопасного использования как имени папки
+  const safeName = String(operatorName).replace(/[\/\\:*?"<>|]/g, "_").trim() || "unknown";
+  const operatorDir = path.join(logsDir, "operators", safeName);
+  if (!fs.existsSync(operatorDir)) {
+    fs.mkdirSync(operatorDir, { recursive: true });
+  }
+  const dateStr = new Date().toISOString().split("T")[0];
+  const logFilePath = path.join(operatorDir, `${dateStr}.log`);
+  return fs.createWriteStream(logFilePath, { flags: "a" });
+}
+
+function writeOperatorLog(operatorName, level, msg) {
+  const stream = getOperatorLogStream(operatorName);
+  if (!stream) return;
+  const date = new Date().toISOString();
+  stream.write(`[${date}] [${level}] ${msg}\n`);
+  stream.end();
+}
+
+// Глобальная функция для записи лога конкретного оператора из любого места кода
+global.logForOperator = function(operatorName, level, ...args) {
+  const msg = args.map(a =>
+    typeof a === "object" ? (a instanceof Error ? a.stack || a.message : JSON.stringify(a)) : String(a)
+  ).join(" ");
+  writeOperatorLog(operatorName, level, msg);
+};
+
+function writeLog(level, args) {
+  const date = new Date().toISOString();
+  // Форматируем объекты (ошибки и т.д.)
+  const msg = args
+    .map((arg) =>
+      typeof arg === "object"
+        ? arg instanceof Error
+          ? arg.stack || arg.message
+          : JSON.stringify(arg)
+        : String(arg),
+    )
+    .join(" ");
+  const logLine = `[${date}] [${level}] ${msg}\n`;
+  const stream = getLogStream();
+  stream.write(logLine);
+  stream.end();
+}
+
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+const originalConsoleWarn = console.warn;
+const originalConsoleInfo = console.info;
+
+console.log = function (...args) {
+  writeLog("INFO", args);
+  originalConsoleLog.apply(console, args);
+};
+console.error = function (...args) {
+  writeLog("ERROR", args);
+  originalConsoleError.apply(console, args);
+};
+console.warn = function (...args) {
+  writeLog("WARN", args);
+  originalConsoleWarn.apply(console, args);
+};
+console.info = function (...args) {
+  writeLog("INFO", args);
+  originalConsoleInfo.apply(console, args);
+};
+// =========================================================
+
 const jwt = require("jsonwebtoken"); // Для защиты админки
 const bcrypt = require("bcryptjs"); // Для паролей
 const db = require("./db"); // Подключаем нашу новую базу данных
 
 const JWT_SECRET = process.env.JWT_SECRET || "snatch_super_secret_123";
 if (!process.env.JWT_SECRET) {
-  console.warn("⚠️  ВНИМАНИЕ: JWT_SECRET не задан в .env! Используется небезопасный дефолт. В продакшене ОБЯЗАТЕЛЬНО задайте JWT_SECRET.");
+  console.warn(
+    "⚠️  ВНИМАНИЕ: JWT_SECRET не задан в .env! Используется небезопасный дефолт. В продакшене ОБЯЗАТЕЛЬНО задайте JWT_SECRET.",
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -51,7 +147,10 @@ const rateLimitStore = new Map(); // ip -> { count, resetAt }
 
 function makeRateLimiter({ windowMs, max, message }) {
   return function rateLimitMiddleware(req, res, next) {
-    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || "unknown";
+    const ip =
+      req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+      req.socket.remoteAddress ||
+      "unknown";
     const now = Date.now();
     let entry = rateLimitStore.get(ip);
     if (!entry || now > entry.resetAt) {
@@ -60,28 +159,44 @@ function makeRateLimiter({ windowMs, max, message }) {
     }
     entry.count++;
     if (entry.count > max) {
-      return res.status(429).json({ error: message || "Слишком много запросов. Попробуйте позже." });
+      return res.status(429).json({
+        error: message || "Слишком много запросов. Попробуйте позже.",
+      });
     }
     next();
   };
 }
 
 // Лимиты
-const loginLimiter  = makeRateLimiter({ windowMs: 15 * 60 * 1000, max: 10,  message: "Слишком много попыток входа. Попробуйте через 15 минут." });
-const checkLimiter  = makeRateLimiter({ windowMs:  1 * 60 * 1000, max: 60,  message: "Слишком много запросов к /check." });
-const mainLimiter   = makeRateLimiter({ windowMs:  1 * 60 * 1000, max: 120, message: "Слишком много запросов." });
+const loginLimiter = makeRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: "Слишком много попыток входа. Попробуйте через 15 минут.",
+});
+const checkLimiter = makeRateLimiter({
+  windowMs: 1 * 60 * 1000,
+  max: 60,
+  message: "Слишком много запросов к /check.",
+});
+const mainLimiter = makeRateLimiter({
+  windowMs: 1 * 60 * 1000,
+  max: 120,
+  message: "Слишком много запросов.",
+});
 
 // Очистка rateLimitStore раз в час
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of rateLimitStore.entries()) {
-    if (now > entry.resetAt) rateLimitStore.delete(ip);
-  }
-}, 60 * 60 * 1000);
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [ip, entry] of rateLimitStore.entries()) {
+      if (now > entry.resetAt) rateLimitStore.delete(ip);
+    }
+  },
+  60 * 60 * 1000,
+);
 
 // Константа: максимальное количество ключей за один запрос
 const MAX_KEYS_PER_REQUEST = 50;
-
 
 const MAX_HISTORY_RECORDS = 1000; // Максимум записей в истории на сессию
 const SESSION_CLEANUP_INTERVAL = 3600000; // Очистка каждый час (1 час)
@@ -159,6 +274,7 @@ function getSession(authHash) {
         letters: 0,
         errors: 0,
       },
+      totalStats: { chat: 0, letters: 0 }, // Накопленная статистика за всё время
       rotationState: new Map(),
       pendingRequests: new Map(),
       ws: null, // Сюда позже запишем текущее соединение
@@ -169,6 +285,30 @@ function getSession(authHash) {
     SESSIONS.get(authHash).lastActivity = Date.now();
   }
   return SESSIONS.get(authHash);
+}
+
+// Сохраняем накопленную статистику и состояние ротации в БД
+function persistTotalStats(authHash, session) {
+  if (!session.totalStats) return;
+  // Сериализуем rotationState (Map → JSON)
+  let rotationJson = null;
+  try {
+    if (session.rotationState && session.rotationState.size > 0) {
+      const obj = {};
+      for (const [key, val] of session.rotationState.entries()) {
+        obj[key] = val;
+      }
+      rotationJson = JSON.stringify(obj);
+    }
+  } catch (e) {
+    console.error("Ошибка сериализации rotationState:", e.message);
+  }
+
+  db.run(
+    "UPDATE licenses SET total_chats = ?, total_letters = ?, rotation_state = ? WHERE key_hash = ?",
+    [session.totalStats.chat, session.totalStats.letters, rotationJson, authHash],
+    (err) => { if (err) console.error("Ошибка сохранения статистики:", err.message); }
+  );
 }
 
 // --- ФУНКЦИИ ОЧИСТКИ ИСТОРИИ (Адаптированные под сессии) ---
@@ -400,7 +540,7 @@ app.post("/admin/api/login", loginLimiter, (req, res) => {
 // 3. API: Получить статистику, ключи и данные профиля
 app.get("/admin/api/status", authenticateToken, (req, res) => {
   db.get(
-    "SELECT nickname, avatar, telegram FROM users WHERE id = ?",
+    "SELECT nickname, avatar, telegram, is_renamed FROM users WHERE id = ?",
     [req.user.id],
     (err, profile) => {
       let licenseQuery = "SELECT * FROM licenses";
@@ -412,12 +552,19 @@ app.get("/admin/api/status", authenticateToken, (req, res) => {
       } else if (req.user.role === "translator") {
         licenseQuery += " WHERE translator_id = ?";
         params.push(req.user.id);
+      } else if (req.user.role === "top") {
+        // Топ видит ключи только своих команд
+        licenseQuery +=
+          " WHERE creator_id IN (SELECT team_user_id FROM top_teams WHERE top_user_id = ?)";
+        params.push(req.user.id);
       }
 
       db.all(licenseQuery, params, (err, licenses) => {
         let scopedChats = 0,
           scopedLetters = 0,
           activeCount = 0;
+        let totalAllChats = 0,
+          totalAllLetters = 0;
 
         const operators = (licenses || []).map((lic) => {
           const session = SESSIONS.get(lic.key_hash);
@@ -427,12 +574,39 @@ app.get("/admin/api/status", authenticateToken, (req, res) => {
             Math.floor((lic.exp_time_ms - Date.now()) / 1000),
           );
 
+          // Накопленная статистика за всё время (из БД + из памяти если онлайн)
+          const licTotalChats = isOnline && session.totalStats
+            ? session.totalStats.chat
+            : (lic.total_chats || 0);
+          const licTotalLetters = isOnline && session.totalStats
+            ? session.totalStats.letters
+            : (lic.total_letters || 0);
+          totalAllChats += licTotalChats;
+          totalAllLetters += licTotalLetters;
+
           let details = null;
           if (isOnline) {
             scopedChats += session.stats.chat;
             scopedLetters += session.stats.letters;
             activeCount++;
-            details = { stats: session.stats, config: session.config };
+
+            // Преобразуем rotationState из Map в объект для передачи клиенту
+            const rotationStateObj = {};
+            if (session.rotationState && session.rotationState.size > 0) {
+              for (const [key, value] of session.rotationState.entries()) {
+                rotationStateObj[key] = {
+                  index: value.index,
+                  startTime: value.startTime,
+                  elapsedMs: Date.now() - value.startTime,
+                };
+              }
+            }
+
+            details = {
+              stats: session.stats,
+              config: session.config,
+              rotationState: rotationStateObj,
+            };
           }
 
           return {
@@ -441,6 +615,9 @@ app.get("/admin/api/status", authenticateToken, (req, res) => {
             expSec: expSec,
             isOnline: isOnline,
             details: details,
+            creatorId: lic.creator_id, // Добавляем для группировки по командам
+            totalChats: licTotalChats,
+            totalLetters: licTotalLetters,
           };
         });
 
@@ -448,12 +625,27 @@ app.get("/admin/api/status", authenticateToken, (req, res) => {
           activeSessions: activeCount,
           globalChats: scopedChats,
           globalLetters: scopedLetters,
+          totalAllChats,
+          totalAllLetters,
           operators,
           role: req.user.role,
           profile: profile || {},
         };
 
-        if (req.user.role === "superadmin") {
+        // Для роли "Топ" добавляем список команд
+        if (req.user.role === "top") {
+          db.all(
+            `SELECT u.id, u.username, u.nickname, u.avatar 
+             FROM users u 
+             INNER JOIN top_teams tt ON u.id = tt.team_user_id 
+             WHERE tt.top_user_id = ?`,
+            [req.user.id],
+            (err, teams) => {
+              responseData.teams = teams || [];
+              res.json(responseData);
+            },
+          );
+        } else if (req.user.role === "superadmin") {
           db.all(
             "SELECT id, username, role, nickname FROM users",
             [],
@@ -503,7 +695,10 @@ app.post("/admin/api/generate", authenticateToken, async (req, res) => {
       .json({ error: "У вас нет прав на выдачу лицензий!" });
   }
   const { days, count, ownerId } = req.body;
-  const note = typeof req.body.note === "string" ? req.body.note.slice(0, 200) : "Operator";
+  const note =
+    typeof req.body.note === "string"
+      ? req.body.note.slice(0, 200)
+      : "Operator";
   const keysCount = Math.min(parseInt(count) || 1, MAX_KEYS_PER_REQUEST);
   const safeDaysGen = Math.min(Math.max(parseInt(days) || 1, 1), 365);
   const expTimeMs = Date.now() + safeDaysGen * 86400 * 1000;
@@ -565,29 +760,41 @@ app.post("/admin/api/profile", authenticateToken, (req, res) => {
   if (typeof telegram === "string") telegram = telegram.slice(0, 100);
   // avatar — base64 или URL, ограничиваем 500KB
   if (typeof avatar === "string" && avatar.length > 512000) {
-    return res.status(400).json({ error: "Аватар слишком большой (макс 500KB)" });
+    return res
+      .status(400)
+      .json({ error: "Аватар слишком большой (макс 500KB)" });
   }
+
+  // Функция для завершения обновления профиля и синхронизации имени ключа
+  const finishProfileUpdate = (err) => {
+    if (err) return res.status(500).json({ error: "Ошибка сохранения" });
+    if (req.user.role === "translator") {
+      db.run(
+        "UPDATE licenses SET note = ? WHERE translator_id = ?",
+        [nickname, req.user.id],
+        (err2) => {
+          res.json({ success: true });
+        },
+      );
+    } else {
+      res.json({ success: true });
+    }
+  };
 
   // Если юзер ввел новый пароль, шифруем его и сохраняем
   if (password && password.trim().length > 0) {
     const passHash = bcrypt.hashSync(password, 10);
     db.run(
-      "UPDATE users SET nickname = ?, avatar = ?, telegram = ?, password = ? WHERE id = ?",
+      "UPDATE users SET nickname = ?, avatar = ?, telegram = ?, password = ?, is_renamed = 1 WHERE id = ?",
       [nickname, avatar, telegram, passHash, req.user.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: "Ошибка сохранения" });
-        res.json({ success: true });
-      },
+      finishProfileUpdate,
     );
   } else {
     // Если поле пароля пустое, обновляем только профиль
     db.run(
-      "UPDATE users SET nickname = ?, avatar = ?, telegram = ? WHERE id = ?",
+      "UPDATE users SET nickname = ?, avatar = ?, telegram = ?, is_renamed = 1 WHERE id = ?",
       [nickname, avatar, telegram, req.user.id],
-      (err) => {
-        if (err) return res.status(500).json({ error: "Ошибка сохранения" });
-        res.json({ success: true });
-      },
+      finishProfileUpdate,
     );
   }
 });
@@ -663,9 +870,11 @@ app.post("/admin/api/users", authenticateToken, (req, res) => {
     return res.status(400).json({ error: "Заполните все поля" });
 
   // БЕЗОПАСНОСТЬ: Только допустимые роли. Без whitelist можно передать роль "superadmin".
-  const ALLOWED_ROLES = ["admin", "team", "translator"];
+  const ALLOWED_ROLES = ["admin", "team", "translator", "top", "superadmin"];
   if (!ALLOWED_ROLES.includes(role)) {
-    return res.status(400).json({ error: `Недопустимая роль. Разрешены: ${ALLOWED_ROLES.join(", ")}` });
+    return res.status(400).json({
+      error: `Недопустимая роль. Разрешены: ${ALLOWED_ROLES.join(", ")}`,
+    });
   }
 
   const passHash = bcrypt.hashSync(password, 10);
@@ -677,6 +886,83 @@ app.post("/admin/api/users", authenticateToken, (req, res) => {
       res.json({ success: true });
     },
   );
+});
+
+// 8. API: Получить команды для роли "Топ" (Только SuperAdmin)
+app.get("/admin/api/top_teams/:topUserId", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin")
+    return res.status(403).json({ error: "Нет прав" });
+
+  const topUserId = parseInt(req.params.topUserId);
+
+  // Получаем все команды (team)
+  db.all(
+    "SELECT id, username, nickname FROM users WHERE role = 'team'",
+    [],
+    (err, allTeams) => {
+      if (err) return res.status(500).json({ error: "Ошибка БД" });
+
+      // Получаем привязанные команды для этого топа
+      db.all(
+        "SELECT team_user_id FROM top_teams WHERE top_user_id = ?",
+        [topUserId],
+        (err, linkedTeams) => {
+          if (err) return res.status(500).json({ error: "Ошибка БД" });
+
+          const linkedIds = linkedTeams.map((t) => t.team_user_id);
+          res.json({
+            allTeams: allTeams || [],
+            linkedTeams: linkedIds,
+          });
+        },
+      );
+    },
+  );
+});
+
+// 9. API: Привязать команды к роли "Топ" (Только SuperAdmin)
+app.post("/admin/api/assign_teams", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin")
+    return res.status(403).json({ error: "Нет прав" });
+
+  const { topUserId, teamIds } = req.body;
+
+  if (!topUserId || !Array.isArray(teamIds)) {
+    return res.status(400).json({ error: "Неверные параметры" });
+  }
+
+  // Сначала удаляем все старые связи
+  db.run("DELETE FROM top_teams WHERE top_user_id = ?", [topUserId], (err) => {
+    if (err) return res.status(500).json({ error: "Ошибка БД" });
+
+    // Если массив пустой - просто возвращаем успех
+    if (teamIds.length === 0) {
+      return res.json({ success: true });
+    }
+
+    // Добавляем новые связи
+    const stmt = db.prepare(
+      "INSERT INTO top_teams (top_user_id, team_user_id) VALUES (?, ?)",
+    );
+
+    let completed = 0;
+    let hasError = false;
+
+    teamIds.forEach((teamId) => {
+      stmt.run([topUserId, teamId], (err) => {
+        if (err && !hasError) {
+          hasError = true;
+          return res.status(500).json({ error: "Ошибка добавления связи" });
+        }
+
+        completed++;
+        if (completed === teamIds.length && !hasError) {
+          stmt.finalize();
+          res.json({ success: true });
+        }
+      });
+    });
+  });
 });
 
 app.post("/admin/api/revoke", authenticateToken, (req, res) => {
@@ -703,15 +989,61 @@ app.post("/admin/api/revoke", authenticateToken, (req, res) => {
   );
 });
 
+// ── Get operator key for download (returns original key if available) ──
+app.post("/admin/api/get-operator-key", authenticateToken, (req, res) => {
+  const { keyHash } = req.body;
+
+  if (!keyHash) {
+    return res.status(400).json({ error: "Нет keyHash" });
+  }
+
+  // Check if user has access to this key
+  db.get(
+    "SELECT creator_id, translator_id, note FROM licenses WHERE key_hash = ?",
+    [keyHash],
+    (err, lic) => {
+      if (err || !lic) {
+        return res.status(404).json({ error: "Ключ не найден" });
+      }
+
+      // Check permissions
+      const hasAccess =
+        req.user.role === "superadmin" ||
+        req.user.role === "admin" ||
+        (req.user.role === "team" && lic.creator_id === req.user.id) ||
+        (req.user.role === "translator" && lic.translator_id === req.user.id);
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: "Нет доступа к этому ключу" });
+      }
+
+      // Check if key is currently online and has the original key stored
+      const session = SESSIONS.get(keyHash);
+      if (session && session.originalKey) {
+        // Return the original key if it's stored in session
+        return res.json({ key: session.originalKey });
+      }
+
+      // If key is not online or original key is not stored, we can't provide it
+      // (Original keys are not stored in database for security)
+      return res.status(404).json({
+        error:
+          "Оригинальный ключ недоступен. Ключи доступны только при первой генерации.",
+      });
+    },
+  );
+});
+
 // ── Extend license (Admin/SuperAdmin only) ──
 app.post("/api/extend", authenticateToken, (req, res) => {
-  if (req.user.role !== "superadmin" && req.user.role !== "admin") {
-    return res.status(403).json({ error: "Нет прав" });
+  if (req.user.role !== "superadmin") {
+    return res.status(403).json({ error: "Нет прав. Продление доступно только Супер Админу." });
   }
   const { keyHash, days = 30 } = req.body;
-  const safeDays = Math.min(Math.max(parseInt(days) || 30, 1), 365); // от 1 до 365 дней
+  const safeDays = Math.min(Math.max(parseInt(days) || 30, 1), 365);
   if (!keyHash) return res.status(400).json({ error: "Нет keyHash" });
   const addMs = safeDays * 86400000;
+
   db.run(
     "UPDATE licenses SET exp_time_ms = MAX(exp_time_ms, ?) + ? WHERE key_hash = ?",
     [Date.now(), addMs, keyHash],
@@ -726,30 +1058,74 @@ app.post("/api/extend", authenticateToken, (req, res) => {
 // ── Быстрая read-only проверка: кому принадлежит ключ (без привязки) ──
 // Расширение вызывает этот endpoint ПЕРЕД тем как давать доступ новому оператору.
 // Никаких сайд-эффектов — только чтение.
+// Проверка ключа БЕЗ привязки к operator_id — используется расширением
+// когда нет открытой вкладки alpha.date (нельзя получить operator_id через alphaFetchViaAnyTab).
+// Возвращает: status, bound (есть ли привязка), exp_sec.
+// НЕ привязывает и НЕ обновляет operator_id.
+app.post("/api/ping-key", checkLimiter, (req, res) => {
+  res.set("SN-Origin", "ok");
+  const { authHash } = extractSnParams(req);
+  if (!authHash)
+    return res.status(401).json({ status: false, msg: "No Auth Key" });
+
+  db.get(
+    "SELECT key_hash, exp_time_ms, operator_id, note FROM licenses WHERE key_hash = ?",
+    [authHash],
+    (err, lic) => {
+      if (err || !lic)
+        return res
+          .status(401)
+          .json({ status: false, msg: "Ключ не найден или удалён!" });
+      if (Date.now() > lic.exp_time_ms)
+        return res
+          .status(401)
+          .json({ status: false, msg: "Лицензия истекла!" });
+
+      const expSec = Math.max(
+        0,
+        Math.floor((lic.exp_time_ms - Date.now()) / 1000),
+      );
+      return res.json({
+        status: true,
+        bound: !!lic.operator_id,
+        operator_id: lic.note,
+        exp_sec: expSec,
+      });
+    },
+  );
+});
+
 app.post("/api/whohas", checkLimiter, (req, res) => {
   res.set("SN-Origin", "ok");
   const { authHash, operatorId } = extractSnParams(req);
-  if (!authHash) return res.status(401).json({ status: false, msg: "No Auth Key" });
+  if (!authHash)
+    return res.status(401).json({ status: false, msg: "No Auth Key" });
 
-  db.get("SELECT key_hash, exp_time_ms, operator_id, note FROM licenses WHERE key_hash = ?", [authHash], (err, lic) => {
-    if (err || !lic) return res.status(401).json({ status: false, msg: "Ключ не найден" });
-    if (Date.now() > lic.exp_time_ms) return res.status(401).json({ status: false, msg: "Лицензия истекла" });
+  db.get(
+    "SELECT key_hash, exp_time_ms, operator_id, note FROM licenses WHERE key_hash = ?",
+    [authHash],
+    (err, lic) => {
+      if (err || !lic)
+        return res.status(401).json({ status: false, msg: "Ключ не найден" });
+      if (Date.now() > lic.exp_time_ms)
+        return res.status(401).json({ status: false, msg: "Лицензия истекла" });
 
-    // Нет привязки — ключ свободен
-    if (!lic.operator_id) {
-      return res.json({ status: true, bound: false, match: true });
-    }
+      // Нет привязки — ключ свободен
+      if (!lic.operator_id) {
+        return res.json({ status: true, bound: false, match: true });
+      }
 
-    // Есть привязка — проверяем совпадение
-    const incomingId = String(operatorId || "").trim();
-    const match = incomingId && lic.operator_id === incomingId;
-    return res.json({
-      status: match,
-      bound: true,
-      match,
-      msg: match ? "OK" : `Этот ключ принадлежит другому аккаунту.`,
-    });
-  });
+      // Есть привязка — проверяем совпадение
+      const incomingId = String(operatorId || "").trim();
+      const match = incomingId && lic.operator_id === incomingId;
+      return res.json({
+        status: match,
+        bound: true,
+        match,
+        msg: match ? "OK" : `Этот ключ принадлежит другому аккаунту.`,
+      });
+    },
+  );
 });
 
 // Извлекает SN-Auth и SN-OperatorID из заголовков (приоритет) или query.
@@ -757,7 +1133,8 @@ app.post("/api/whohas", checkLimiter, (req, res) => {
 function extractSnParams(req) {
   return {
     authHash: req.headers["sn-auth"] || req.query["SN-Auth"] || null,
-    operatorId: req.headers["sn-operatorid"] || req.query["SN-OperatorID"] || null,
+    operatorId:
+      req.headers["sn-operatorid"] || req.query["SN-OperatorID"] || null,
     action: req.headers["sn-action"] || req.query["SN-Action"] || null,
   };
 }
@@ -889,6 +1266,31 @@ app.post("/", mainLimiter, (req, res) => {
       // 3. Получаем онлайн-сессию для этого ключа
       const session = getSession(authHash);
 
+      // Загружаем накопленную статистику из БД если сессия только что создана
+      if (!session.totalStatsLoaded) {
+        session.totalStatsLoaded = true;
+        if (license.total_chats || license.total_letters) {
+          session.totalStats = {
+            chat: license.total_chats || 0,
+            letters: license.total_letters || 0,
+          };
+        }
+        // Восстанавливаем состояние ротации из БД (чтобы продолжить с того же инвайта)
+        if (license.rotation_state) {
+          try {
+            const savedRotation = JSON.parse(license.rotation_state);
+            for (const [key, val] of Object.entries(savedRotation)) {
+              session.rotationState.set(key, val);
+            }
+            console.log(`♻️ Восстановлена ротация для ${license.note || authHash.substring(0, 8)}: ${Object.keys(savedRotation).length} записей`);
+          } catch (e) {
+            console.error("Ошибка восстановления rotationState:", e.message);
+          }
+        }
+        // Запоминаем имя оператора для логирования
+        session.operatorName = license.note || authHash.substring(0, 8);
+      }
+
       if (action === "Start") {
         try {
           let bodyData = req.body;
@@ -909,6 +1311,8 @@ app.post("/", mainLimiter, (req, res) => {
           console.log(
             `\n✅ НАСТРОЙКИ ЗАГРУЖЕНЫ ДЛЯ: ${license.note} (${authHash.substring(0, 8)}...) | Оператор: ${operatorId || "не указан"}`,
           );
+          // Лог в папку оператора
+          global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] ✅ Подключился. Оператор ID: ${operatorId || "не указан"}. Ключ: ${authHash.substring(0, 8)}...`);
         } catch (e) {
           console.log(`⚠️ Ошибка чтения настроек [${authHash}]:`, e.message);
         }
@@ -927,9 +1331,9 @@ app.post("/", mainLimiter, (req, res) => {
         operator_id: license.note,
         bound_operator: license.operator_id || null, // Возвращаем привязанного оператора
         exp_sec: expSec,
-        endpoint: (process.env.PUBLIC_URL || "http://localhost:3000") + "/",
+        endpoint: (process.env.PUBLIC_URL || "https://snat4.com") + "/",
         sid: authHash,
-        wss_url: (process.env.PUBLIC_URL || "ws://localhost:3000").replace(
+        wss_url: (process.env.PUBLIC_URL || "wss://snat4.com").replace(
           /^http/,
           "ws",
         ),
@@ -941,7 +1345,7 @@ app.post("/", mainLimiter, (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
-const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+const PUBLIC_URL = process.env.PUBLIC_URL || `https://snat4.com`;
 
 const server = app.listen(PORT, HOST, () => {
   console.log(`\n${"═".repeat(70)}`);
@@ -1113,20 +1517,34 @@ function getInviteData(session, girlId, triggerCategory = null) {
 
 // Добавили req, чтобы читать URL
 wss.on("connection", (ws, req) => {
-  // Вытаскиваем ключ из URL (расширение передает его как ?SN-Auth=...)
+  // Получаем реальный IP через Nginx
+  const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress;
   const urlParams = new URL(req.url, `http://${req.headers.host}`).searchParams;
   const authHash = urlParams.get("SN-Auth");
 
   if (!authHash) {
-    console.log("❌ Отклонено: Нет ключа авторизации");
+    console.log(`❌ [${ip}] Отклонено: Нет ключа в URL`);
     return ws.close();
   }
 
-  // Находим сессию этого юзера
   const session = getSession(authHash);
-  session.ws = ws; // Привязываем этот сокет к его сессии
+  session.ws = ws;
 
-  console.log(`[WS] Бот подключен. Ключ: ${authHash.substring(0, 8)}...`);
+  console.log(
+    `🌐 [${ip}] ПОДКЛЮЧЕНИЕ: Ключ ${authHash.substring(0, 8)}... (Session: ${SESSIONS.size})`,
+  );
+  // Лог подключения в папку оператора
+  if (session.operatorName) {
+    global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] 🌐 WS подключение установлено. IP: ${ip}`);
+  }
+
+  // Добавляем обработчик ошибок самого сокета
+  ws.on("error", (err) => {
+    console.error(
+      `🔌 ОШИБКА СОКЕТА [${authHash.substring(0, 8)}]:`,
+      err.message,
+    );
+  });
 
   const statsInterval = setInterval(() => {
     if (ws.readyState === ws.OPEN) {
@@ -1183,6 +1601,10 @@ wss.on("connection", (ws, req) => {
       checkUtcReset(session);
       const msgStr = data.toString();
       const msg = JSON.parse(msgStr);
+      // pong
+      if (msg.type === "PONG") {
+        return;
+      }
 
       if (msg.id && session.pendingRequests.has(msg.id)) {
         const resolve = session.pendingRequests.get(msg.id);
@@ -1237,10 +1659,12 @@ wss.on("connection", (ws, req) => {
           console.log(
             `✅ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] УСПЕШНО ДОСТАВЛЕНО`,
           );
+          global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] ✅ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] УСПЕШНО ДОСТАВЛЕНО`);
         } else {
           console.log(
             `❌ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] ОШИБКА: ${responseMessage}`,
           );
+          global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] ❌ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] ОШИБКА: ${responseMessage}`);
 
           const isStopError = /already received|Restriction/i.test(
             responseMessage,
@@ -1250,6 +1674,7 @@ wss.on("connection", (ws, req) => {
             console.log(
               `   ⛔ Запись сохранена в истории, чтобы избежать повторного спама.`,
             );
+            global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}]    ⛔ Запись сохранена в истории`);
           } else {
             // Удаляем из истории КОНКРЕТНОЙ сессии
             session.historyChat.delete(historyKey);
@@ -1257,6 +1682,7 @@ wss.on("connection", (ws, req) => {
             console.log(
               `   ⟲ Удалено из истории (попробуем снова в следующем цикле)`,
             );
+            global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}]    ⟲ Удалено из истории (попробуем снова в следующем цикле)`);
           }
 
           // Плюсуем ошибку в стату сессии
@@ -1290,16 +1716,19 @@ wss.on("connection", (ws, req) => {
         }
 
         // Считаем уникальные диалоги сразу для лога и статистики
-        const uniqueScanIds = new Set(users.map(u => {
-          const isM = isMan(u);
-          const mid = isM ? u.sender_external_id : u.recipient_external_id;
-          const rid = isM ? u.recipient_external_id : u.sender_external_id;
-          return `${rid}_${mid}`;
-        }));
+        const uniqueScanIds = new Set(
+          users.map((u) => {
+            const isM = isMan(u);
+            const mid = isM ? u.sender_external_id : u.recipient_external_id;
+            const rid = isM ? u.recipient_external_id : u.sender_external_id;
+            return `${rid}_${mid}`;
+          }),
+        );
 
         console.log(
           `🔎 [${authHash.substring(0, 8)}] Найдено ${uniqueScanIds.size} уникальных диалогов.`,
         );
+        global.logForOperator(session.operatorName, "INFO", `🔎 [${authHash.substring(0, 8)}] Найдено ${uniqueScanIds.size} уникальных диалогов.`);
 
         // Сортировка: Триггеры всегда первыми
         users.sort((a, b) => {
@@ -1456,6 +1885,11 @@ wss.on("connection", (ws, req) => {
                 }
 
                 session.stats.chat++;
+                if (!session.totalStats) session.totalStats = { chat: 0, letters: 0 };
+                session.totalStats.chat++;
+                persistTotalStats(authHash, session);
+                const mediaStr = media ? ` [+1 media]` : "";
+                global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] 📨 [${formatUser(session, myId)} -> ${formatUser(session, manId)}] ЧАТ: "${(text || "").substring(0, 30)}..."${mediaStr}`);
                 session.historyChat.set(historyKey, Date.now());
                 continue;
               }
@@ -1542,6 +1976,10 @@ wss.on("connection", (ws, req) => {
                 );
 
                 session.stats.letters++;
+                if (!session.totalStats) session.totalStats = { chat: 0, letters: 0 };
+                session.totalStats.letters++;
+                persistTotalStats(authHash, session);
+                global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] ✉️ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] ПИСЬМО: "${text.substring(0, 20)}..." ${mediaInfo}`);
                 session.historyLetters.add(historyKey);
 
                 await sleep(2000);
@@ -1568,16 +2006,33 @@ wss.on("connection", (ws, req) => {
   });
 
   const pingInterval = setInterval(() => {
-    if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ type: "ping" }));
-  }, 20000);
+    if (ws.readyState === ws.OPEN) {
+      ws.send(
+        JSON.stringify({
+          type: "HBT",
+          timestamp: Date.now(),
+        }),
+      );
+    }
+  }, 30000);
 
-  ws.on("close", () => {
+  ws.on("close", (code, reason) => {
     isRunning = false;
-    // Очищаем сокет из сессии при отключении
     if (session && session.ws === ws) {
       session.ws = null;
+      // Сохраняем ротацию и статистику в БД при дисконнекте
+      persistTotalStats(authHash, session);
     }
     clearInterval(statsInterval);
     clearInterval(pingInterval);
+
+    // Код 1006 — это обычно разрыв по тайм-ауту (Nginx или Cloudflare)
+    // Код 1000 — нормальное закрытие
+    const reasonStr = reason.toString() || "причина не указана";
+    console.log(
+      `📡 [${authHash.substring(0, 8)}] ДИСКОННЕКТ! Код: ${code} | Причина: ${reasonStr}`,
+    );
+    // Детализированный лог дисконнекта в папку оператора
+    global.logForOperator(session.operatorName, "INFO", `📡 [${authHash.substring(0, 8)}] ДИСКОННЕКТ! Код: ${code} | Причина: ${reasonStr}`);
   });
 });

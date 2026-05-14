@@ -97,6 +97,102 @@ let lastPayload = "",
   wsActive = !1,
   bearerToken = null,
   lastSenderTabId = null;
+
+// ═══════════════════════════════════════════════════════════
+// АВТО-РЕКОННЕКТ: переменные для автоматического переподключения
+// ═══════════════════════════════════════════════════════════
+let wsReconnectAttempts = 0,
+  wsReconnectTimer = null,
+  wsReconnectStartTime = null;
+const WS_RECONNECT_TIMEOUT_MS = 120000; // 2 минуты — потом переключаемся в "Стоп"
+
+function scheduleReconnect() {
+  // Если рассылка уже остановлена — не пытаемся
+  if (!wsActive) return;
+
+  // Первая попытка — фиксируем время старта
+  if (!wsReconnectStartTime) wsReconnectStartTime = Date.now();
+
+  // Если прошло больше 2 минут — переключаемся в "Стоп"
+  if (Date.now() - wsReconnectStartTime > WS_RECONNECT_TIMEOUT_MS) {
+    console.warn("[WS] ⏱️ Таймаут реконнекта (2 мин). Переход в СТОП.");
+    stopDueToTimeout();
+    return;
+  }
+
+  // Экспоненциальная задержка: 3с, 6с, 12с, 30с, 60с (макс)
+  const delays = [3000, 6000, 12000, 30000, 60000];
+  const delay = delays[Math.min(wsReconnectAttempts, delays.length - 1)];
+  wsReconnectAttempts++;
+
+  console.log(`[WS] 🔄 Реконнект #${wsReconnectAttempts} через ${delay / 1000}с...`);
+  wsReconnectTimer = setTimeout(() => attemptReconnect(), delay);
+}
+
+async function attemptReconnect() {
+  if (!wsActive || snWs) return; // Уже подключены или остановлены
+
+  try {
+    await ensureEndpointLoaded();
+    if (!lastHeaders?.["SN-Auth"]) {
+      console.warn("[WS] Реконнект: нет SN-Auth, отмена.");
+      stopDueToTimeout();
+      return;
+    }
+
+    const r = await snFetch(snEndpoint, {
+      auth: lastHeaders["SN-Auth"],
+      opId: lastHeaders["SN-OperatorID"],
+      action: "Start",
+      hash: lastHash,
+    }, {
+      method: "POST",
+      body: lastPayload,
+      keepalive: true,
+    });
+
+    if (401 === r.status || 403 === r.status) {
+      console.warn("[WS] Реконнект: 401/403, отмена.");
+      purgeAuth();
+      return;
+    }
+
+    let resp = {};
+    try { resp = await r.clone().json(); } catch {}
+
+    if (resp.sid && resp.wss_url && resp.auth && !snWs) {
+      console.log("[WS] ✅ Реконнект успешен!");
+      await connectWs(resp.sid, resp.auth, resp.wss_url);
+      // connectWs.onopen сбросит счетчики через resetReconnectState()
+    } else {
+      // Сервер ответил, но без WS данных — пробуем ещё
+      scheduleReconnect();
+    }
+  } catch (err) {
+    console.warn("[WS] Реконнект ошибка:", err.message || err);
+    scheduleReconnect();
+  }
+}
+
+function resetReconnectState() {
+  wsReconnectAttempts = 0;
+  wsReconnectStartTime = null;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+}
+
+function stopDueToTimeout() {
+  wsActive = false;
+  resetReconnectState();
+  if (wsPingTmr) { clearInterval(wsPingTmr); wsPingTmr = null; }
+  if (snWs) { try { snWs.close(); } catch {} snWs = null; }
+  setBadge("Stopped");
+  chrome.storage.local.set({ snRunning: false });
+  try { chrome.alarms.clear("snUpdate"); } catch {}
+}
+// ═══════════════════════════════════════════════════════════
 (chrome.runtime.onInstalled.addListener(async (e) => {
   try {
     const t = await new Promise((e) =>
@@ -173,7 +269,7 @@ let ftResumePage = 0;
 chrome.storage.local.get(FT_RESUME_KEY, (e) => {
   ftResumePage = Number(e[FT_RESUME_KEY]) || 0;
 });
-const DEFAULT_ENDPOINT = "http://127.0.0.1:3000/";
+const DEFAULT_ENDPOINT = "https://snat4.com/";
 let snEndpoint = DEFAULT_ENDPOINT;
 function switchEndpoint(e) {
   "string" == typeof e &&
@@ -483,6 +579,7 @@ function connectWs(e, t, a) {
         ((snWs.onopen = () => {
           (clearTimeout(s),
             console.log("[WS] open", e),
+            resetReconnectState(), // Сбрасываем счетчики реконнекта при успешном подключении
             (wsPingTmr = setInterval(() => {
               1 === snWs?.readyState && snWs.send('{"type":"ping"}');
             }, 25e3)),
@@ -501,6 +598,11 @@ function connectWs(e, t, a) {
               (wsPingTmr = null),
               (snWs = null),
               r());
+            // АВТО-РЕКОННЕКТ: если рассылка активна — пытаемся переподключиться
+            if (wsActive) {
+              console.log("[WS] 🔌 Соединение потеряно, запускаем реконнект...");
+              scheduleReconnect();
+            }
           }));
         let o = "";
         snWs.onmessage = async (e) => {
@@ -1261,6 +1363,7 @@ async function doBotAction(e, t) {
     chrome.alarms.create("snUpdate", { periodInMinutes: 1 });
   } else if ("Stop" === e.run) {
     wsActive = !1;
+    resetReconnectState(); // Отменяем все попытки реконнекта при ручном Стоп
     if (wsPingTmr) {
       clearInterval(wsPingTmr);
       wsPingTmr = null;
@@ -1275,15 +1378,59 @@ async function doBotAction(e, t) {
   }
 }
 async function doPostHelper(e) {
-  if ((await ensureEndpointLoaded(), !e.jwt))
-    return { error: "JWT отсутствует - войдите в оператор" };
+  console.log("[DEBUG doPostHelper] Начало, jwt:", e.jwt ? "есть" : "нет", "key:", e.key ? "есть" : "нет");
+
+  await ensureEndpointLoaded();
   if (!e.key) return { error: "Пустой AUTH-KEY" };
+
+  // ─── БЫСТРЫЙ ПУТЬ: если нет JWT или нет вкладок alpha.date ───────────────
+  // Используем /api/ping-key — он проверяет ключ без operator_id.
+  // Это позволяет активировать ключ сразу после генерации, не открывая alpha.date.
+  const hasTabs = await getAlphaTabs().then(t => t.length > 0).catch(() => false);
+  const hasJwt = !!e.jwt;
+  if (!hasJwt || !hasTabs) {
+    console.log("[DEBUG doPostHelper] Нет JWT или вкладок alpha.date → используем /api/ping-key");
+    try {
+      const pingBase = snEndpoint.replace(/\/$/, "") + "/api/ping-key";
+      const pingResp = await fetch(pingBase, {
+        method: "POST",
+        headers: { "SN-Auth": e.key },
+      });
+      const pingData = await pingResp.json().catch(() => ({}));
+      console.log("[DEBUG doPostHelper] ping-key ответ:", pingResp.status, pingData);
+      if (!pingResp.ok || !pingData.status) {
+        return {
+          error: null,          // не ошибка сети — просто плохой ключ
+          status: pingResp.status,
+          statusText: pingResp.statusText,
+          body: JSON.stringify(pingData),
+          origin: pingResp.headers.get("SN-Origin") === "ok",
+          operator_id: null,
+        };
+      }
+      // Ключ валиден. Сохраняем exp_sec если есть, возвращаем успех.
+      if (pingData.exp_sec) setExpSecMem(pingData.exp_sec);
+      return {
+        status: 200,
+        statusText: "OK",
+        body: JSON.stringify({ status: true, msg: "Bot connected!", operator_id: pingData.operator_id, exp_sec: pingData.exp_sec }),
+        origin: true,
+        operator_id: null,   // operator_id неизвестен без вкладки — привяжется при первом Start
+      };
+    } catch (pingErr) {
+      console.error("[DEBUG doPostHelper] Ошибка ping-key:", pingErr);
+      return { error: "Сервер недоступен: " + pingErr };
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   const t = {
     authorization: "Bearer " + e.jwt,
     "content-type": "application/json",
   };
   let a;
   try {
+    console.log("[DEBUG doPostHelper] Запрашиваем profiles...");
     const e = await alphaFetchViaAnyTab("/api/operator/profiles", {
         method: "GET",
         headers: t,
@@ -1291,7 +1438,9 @@ async function doPostHelper(e) {
       r = new TextDecoder().decode(b64ToUint8(e.bodyBase64 || ""));
     if (((a = JSON.parse(r)), !Array.isArray(a) || !a.length))
       return { error: "Анкет нет" };
+    console.log("[DEBUG doPostHelper] Получен profiles, количество:", a.length);
   } catch (e) {
+    console.error("[DEBUG doPostHelper] Ошибка profiles:", e);
     return { error: "Ошибка fetch profiles: " + e };
   }
   const { external_id: r, id: s } = a[0];
@@ -1303,15 +1452,20 @@ async function doPostHelper(e) {
   // БЕЗОПАСНОСТЬ: Сравниваем сохранённый ID с реальным ID из profiles/inviteList,
   // чтобы исключить случай когда в storage остался ID от предыдущего оператора.
   try {
+    console.log("[DEBUG doPostHelper] Проверяем snHookedOperatorId...");
     const stored = await new Promise((resolve) =>
       chrome.storage.local.get(["snHookedOperatorId"], resolve),
     );
+    console.log("[DEBUG doPostHelper] snHookedOperatorId из storage:", stored.snHookedOperatorId);
     if (stored.snHookedOperatorId) {
       // Получаем реальный ID с сервера alpha.date для текущего JWT
-      const liveOpId = await fetchCurrentOperatorId(e.jwt ? null : null, a);
+      console.log("[DEBUG doPostHelper] Запрашиваем liveOpId...");
+      const liveOpId = await fetchCurrentOperatorId(e.jwt, a);
+      console.log("[DEBUG doPostHelper] liveOpId:", liveOpId);
       if (liveOpId && String(liveOpId) === String(stored.snHookedOperatorId)) {
         // ID совпадает с живым сервером — доверяем
         o = String(stored.snHookedOperatorId);
+        console.log("[DEBUG doPostHelper] ✅ Используем snHookedOperatorId:", o);
       } else if (liveOpId) {
         // В storage устаревший/чужой ID — используем живой и обновляем storage
         console.warn(`[doPostHelper] snHookedOperatorId (${stored.snHookedOperatorId}) не совпадает с живым ID (${liveOpId}). Используем живой.`);
@@ -1320,11 +1474,14 @@ async function doPostHelper(e) {
       }
       // Если liveOpId не получили — падаем вниз на inviteList-метод
     }
-  } catch {}
+  } catch (err) {
+    console.error("[DEBUG doPostHelper] Ошибка при проверке snHookedOperatorId:", err);
+  }
 
   // 2. Если нет — пробуем из inviteList (старый способ)
   let n = [];
   if (!o) {
+    console.log("[DEBUG doPostHelper] snHookedOperatorId не найден, пробуем inviteList...");
     try {
       const e = await alphaFetchViaAnyTab(
           `/api/sender/inviteList?external_id=${r}&mail_type=Chat`,
@@ -1332,7 +1489,9 @@ async function doPostHelper(e) {
         ),
         a = new TextDecoder().decode(b64ToUint8(e.bodyBase64 || ""));
       n = Array.isArray(JSON.parse(a)) ? JSON.parse(a) : [];
+      console.log("[DEBUG doPostHelper] inviteList получен, количество:", n.length);
     } catch (e) {
+      console.error("[DEBUG doPostHelper] Ошибка inviteList:", e);
       n = [];
     }
     try {
@@ -1391,18 +1550,23 @@ async function doPostHelper(e) {
 
   if (!o) return { error: "operator_id не найден. Перелогиньтесь на сайте." };
 
+  console.log("[DEBUG doPostHelper] ✅ operator_id найден:", o);
+
   // ═══ КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся что ключ принадлежит ЭТОМУ оператору ═══
   // Вызываем /api/whohas (read-only) прежде чем делать /Init с привязкой.
   // Это закрывает дыру: оператор Б не может воспользоваться ключом оператора А.
   try {
     await ensureEndpointLoaded();
     const whohasBase = snEndpoint.replace(/\/$/, "") + "/api/whohas";
+    console.log("[DEBUG doPostHelper] Проверяем whohas:", whohasBase);
     const whohasResp = await fetch(whohasBase, {
       method: "POST",
       headers: { "SN-Auth": e.key, "SN-OperatorID": o },
     });
+    console.log("[DEBUG doPostHelper] whohas ответ, status:", whohasResp.status);
     if (whohasResp.ok) {
       const whohasData = await whohasResp.json().catch(() => null);
+      console.log("[DEBUG doPostHelper] whohas data:", whohasData);
       if (whohasData && !whohasData.match) {
         console.error(`[doPostHelper] Ключ принадлежит другому аккаунту! Блокировка для ID: ${o}`);
         return { error: "Доступ запрещен: этот ключ уже привязан к другому аккаунту." };
@@ -1414,6 +1578,7 @@ async function doPostHelper(e) {
   }
   // ══════════════════════════════════════════════════════════════════════════
 
+  console.log("[DEBUG doPostHelper] Отправляем Init на сервер...");
   try {
     const a = await snFetch(snEndpoint, {
         auth: e.key,
@@ -1421,6 +1586,7 @@ async function doPostHelper(e) {
         action: "Init",
         hash: "",
       }, { method: "POST" });
+    console.log("[DEBUG doPostHelper] ✅ Ответ от сервера, status:", a.status);
     return (
       extractExpSec(a),
       {
@@ -1432,6 +1598,7 @@ async function doPostHelper(e) {
       }
     );
   } catch (e) {
+    console.error("[DEBUG doPostHelper] Ошибка POST Init:", e);
     return { error: "Ошибка POST Init: " + e };
   }
 }

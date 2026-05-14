@@ -13,8 +13,7 @@
   ],
   "host_permissions": [
     "https://alpha.date/*",
-    "http://localhost:3000/*",
-    "http://127.0.0.1:3000/*",
+    "https://snat4.com/*",
     "http://45.82.255.216:8080/*",
     "https://geocoding-api.open-meteo.com/*"
   ],
@@ -49,7 +48,7 @@
       "js": [
         "page-bridge.js"
       ],
-      "run_at": "document_idle",
+      "run_at": "document_start",
       "world": "MAIN"
     },
     {

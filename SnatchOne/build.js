@@ -2,39 +2,39 @@ const fs = require('fs');
 const path = require('path');
 const JavaScriptObfuscator = require('javascript-obfuscator');
 
-const srcDir = __dirname; 
-const outDir = path.join(__dirname, 'dist'); 
+const srcDir = __dirname;
+const outDir = path.join(__dirname, 'dist');
 
 const obfuscationOptions = {
     compact: false, // Оставляем многострочность
-    
+
     // === ОТКЛЮЧЕНО ТО, ЧТО ЛОМАЛО ЛОГИКУ ===
     controlFlowFlattening: false, // Выключаем искажение структуры, оно ломает UI
     deadCodeInjection: false,     // Выключаем мертвый код
     selfDefending: false,         // КРИТИЧНО: Выключаем самозащиту кода (она ломала inject.js)
     stringArrayCallsTransform: false, // Выключаем трансформацию вызовов массива
-    
+
     // === ОСТАВЛЯЕМ БЕЗОПАСНУЮ ЗАПУТАННОСТЬ ===
     identifierNamesGenerator: 'hexadecimal', // Имена в 16-ричном формате
     renameGlobals: false,
-    
+
     stringArray: true,
     stringArrayEncoding: ['base64'], // Безопасное шифрование строк
     stringArrayThreshold: 0.8,
     unicodeEscapeSequence: false,
     numbersToExpressions: true, // Запутывает числа
-    
+
     // === ЗАЩИТА ТВОИХ ФУНКЦИЙ ===
     reservedNames: [
-        'BalanceWidget', 
+        'BalanceWidget',
         'spend', 'Spend',
         'delete', 'media'
     ],
-    
+
     reservedStrings: [
         'balance', 'spend', 'media',
         'BalanceWidget',
-        '.spend-badge', '#spend', 
+        '.spend-badge', '#spend',
         '.media-delete', '.delete-btn'
     ]
 };

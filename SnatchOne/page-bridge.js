@@ -30,6 +30,17 @@ const INFLIGHT = new Map();
   try {
     window.postMessage({ src: "SN_PAGE", type: "SN_READY" }, location.origin);
   } catch {}
+  try {
+    const origSetItem = window.localStorage.setItem;
+    window.localStorage.setItem = function(key, value) {
+      origSetItem.apply(this, arguments);
+      try {
+        if (key === "token" && value) {
+          window.postMessage({ src: "SN_PAGE", type: "SN_LOGIN_SUCCESS", token: value }, location.origin);
+        }
+      } catch (e) {}
+    };
+  } catch (e) {}
   window.addEventListener("message", async (i) => {
     // БЕЗОПАСНОСТЬ: Принимаем сообщения только от текущей страницы (того же origin).
     // Без этой проверки любой iframe или открытая вкладка могла бы отправить
