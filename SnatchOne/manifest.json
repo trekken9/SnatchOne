@@ -56,10 +56,11 @@
         "https://alpha.date/*"
       ],
       "js": [
-        "inject.js",
+        "inject-loader.js",
         "media_new.js",
         "translit.js",
         "chat-search.js",
+        "clipboard-buffer.js",
         "actions-sort.js"
       ],
       "css": [

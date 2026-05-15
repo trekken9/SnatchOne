@@ -66,14 +66,19 @@ function renderFilteredKeys() {
             ? `<button class="btn btn-success" onclick="renewLicense('${op.keyHash}')">Продлить</button>`
             : "";
 
+        const todayChats   = op.isOnline ? (op.details?.stats?.chat    ?? 0) : "—";
+        const todayLetters = op.isOnline ? (op.details?.stats?.letters ?? 0) : "—";
+
         const tr = document.createElement("tr");
         tr.className = `key-row ${op.isOnline ? 'status-online' : 'status-offline'}`;
         tr.innerHTML = `
             <td><span class="dot ${op.isOnline ? "online" : "offline"}"></span></td>
             <td><strong>${op.operatorId || "Без имени"}</strong></td>
             <td><span class="${timeClass}">${days}д ${hours}ч</span></td>
+            <td style="text-align:center;"><span class="stat-badge ${op.isOnline ? 'stat-badge-chat' : 'stat-badge-off'}">${todayChats}</span></td>
+            <td style="text-align:center;"><span class="stat-badge ${op.isOnline ? 'stat-badge-letter' : 'stat-badge-off'}">${todayLetters}</span></td>
             <td>
-                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
                     ${infoBtn}
                     ${renewBtnTop}
                     ${killBtn}

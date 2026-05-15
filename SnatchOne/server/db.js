@@ -69,6 +69,38 @@ db.serialize(() => {
 
   // 6. Добавляем колонку для сохранения состояния ротации инвайтов (JSON)
   db.run("ALTER TABLE licenses ADD COLUMN rotation_state TEXT DEFAULT NULL", (err) => {});
+
+  // 7. Таблица кэша мужчин (Read-Through Cache для balance/dob)
+  db.run(`CREATE TABLE IF NOT EXISTS mans (
+        man_id TEXT PRIMARY KEY,
+        spend REAL DEFAULT 0,
+        reg_date TEXT,
+        last_updated INTEGER
+    )`);
+
+  // 8. Таблица уведомлений (глобальные сообщения от CEO)
+  db.run(`CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT NOT NULL,
+        created_by INTEGER,
+        created_at TEXT DEFAULT (datetime('now')),
+        is_active INTEGER DEFAULT 1,
+        FOREIGN KEY (created_by) REFERENCES users(id)
+    )`);
+
+  // 9. Таблица привязки уведомлений к пользователям (прочитано/не прочитано)
+  db.run(`CREATE TABLE IF NOT EXISTS user_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        notification_id INTEGER,
+        user_id INTEGER,
+        viewed_at TEXT,
+        FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE(notification_id, user_id)
+    )`);
+
+  // 10. Иерархия: creator_id — кто создал пользователя (миграция)
+  db.run("ALTER TABLE users ADD COLUMN creator_id INTEGER DEFAULT NULL", (err) => {});
 });
 
 module.exports = db;

@@ -1,4 +1,6 @@
 /******/ (() => {
+  if (globalThis.__snatchHeavyInjectExecuted) return;
+  globalThis.__snatchHeavyInjectExecuted = true;
   // webpackBootstrap
   /******/ var __webpack_modules__ = {
     /***/ 20(__unused_webpack_module, exports, __webpack_require__) {
@@ -34783,11 +34785,7 @@ styleSheet.flush()
       );
       const chatMediaData = await chatMediaResponse.json();
       const letterMediaData = await letterMediaResponse.json();
-      console.log("Chat media response:", chatMediaData.response?.slice(0, 2));
-      console.log(
-        "Letter media response:",
-        letterMediaData.response?.slice(0, 2),
-      );
+
       // Transform chat media
       const chatMedia = (chatMediaData.response || []).map((media) => ({
         from: MediaSource.CHAT,
@@ -34802,10 +34800,7 @@ styleSheet.flush()
           media.thumb_link || media.message_thumb || media.message_content,
         isViewed: !!(media.read_status || media.payed),
       }));
-      console.log(
-        "Transformed media (first 2):",
-        [...chatMedia, ...letterMedia].slice(0, 2),
-      );
+
       return [...chatMedia, ...letterMedia];
     }
     /**
@@ -35310,6 +35305,8 @@ styleSheet.flush()
         const spendText = hasSpend ? `💸: ${parseFloat(balance).toFixed(2)}$` : "Spend:🚫";
 
         let regDateStr = "🚫";
+        let regDateColor = "rgba(255,255,255,0.7)";
+        let regDateBg = "rgba(255,255,255,0.05)";
         if (dob) {
           try {
             let d = dob;
@@ -35321,6 +35318,19 @@ styleSheet.flush()
               const m = String(dt.getMonth() + 1).padStart(2, '0');
               const d_str = String(dt.getDate()).padStart(2, '0');
               regDateStr = `${y}-${m}-${d_str}`;
+              // --- УСЛОВНОЕ ФОРМАТИРОВАНИЕ ПО ДАТЕ РЕГИСТРАЦИИ ---
+              const diffDays = (Date.now() - dt.getTime()) / (1000 * 60 * 60 * 24);
+              if (diffDays < 14) {
+                regDateColor = "#00b894"; regDateBg = "rgba(0,184,148,0.15)";   // 🟢 Зеленый — Новый
+              } else if (diffDays < 91) {
+                regDateColor = "#f9ca24"; regDateBg = "rgba(249,202,36,0.15)";  // 🟡 Золотой — 2 нед–3 мес
+              } else if (diffDays < 365) {
+                regDateColor = "#e17055"; regDateBg = "rgba(225,112,85,0.15)";  // 🔴 Красный — 3–12 мес
+              } else if (diffDays < 730) {
+                regDateColor = "#0984e3"; regDateBg = "rgba(9,132,227,0.15)";   // 🔵 Синий — 12–24 мес
+              } else {
+                regDateColor = "#dfe6e9"; regDateBg = "rgba(223,230,233,0.12)"; // ⚪ Белый — 24–90 мес
+              }
             }
           } catch (_) { }
         }
@@ -35385,11 +35395,11 @@ styleSheet.flush()
                   (0, jsx_runtime.jsx)("div", {
                     style: {
                       fontSize: "11px",
-                      color: "rgba(255,255,255,0.7)",
-                      fontWeight: "500",
+                      color: regDateColor,
+                      fontWeight: "600",
                       whiteSpace: "nowrap",
                       padding: "2px 6px",
-                      background: "rgba(255,255,255,0.05)",
+                      background: regDateBg,
                       borderRadius: "4px",
                     },
                     children: `REG: ${regDateStr}`,
@@ -38211,10 +38221,31 @@ styleSheet.flush()
           parent.insertBefore(wrapper, containerElement);
         }
 
+        // FIX CSP: Оптимизируем MutationObserver с debounce
+        let wrapperTimeout = null;
+        let lastWrapperCheck = 0;
+        const MIN_WRAPPER_INTERVAL = 300; // Минимум 300ms между проверками
+        
         const observer = new MutationObserver(() => {
-          if (wrapper.parentNode !== parent || wrapper.nextSibling !== containerElement) {
-            parent.insertBefore(wrapper, containerElement);
+          const now = Date.now();
+          
+          // Пропускаем если прошло меньше MIN_WRAPPER_INTERVAL
+          if (now - lastWrapperCheck < MIN_WRAPPER_INTERVAL) {
+            return;
           }
+          
+          // Debounce
+          if (wrapperTimeout) {
+            clearTimeout(wrapperTimeout);
+          }
+          
+          wrapperTimeout = setTimeout(() => {
+            // Проверяем нужно ли обновление
+            if (wrapper.parentNode !== parent || wrapper.nextSibling !== containerElement) {
+              parent.insertBefore(wrapper, containerElement);
+              lastWrapperCheck = Date.now();
+            }
+          }, 150); // Debounce 150ms
         });
 
         // Наблюдаем за родителем, так как теперь мы вставляем перед контейнером
@@ -38222,6 +38253,9 @@ styleSheet.flush()
 
         return () => {
           observer.disconnect();
+          if (wrapperTimeout) {
+            clearTimeout(wrapperTimeout);
+          }
         };
       }, [containerElement]);
 
@@ -38362,15 +38396,31 @@ styleSheet.flush()
             prevStatsRef.current = targetStats;
             isFirstRun.current = false;
 
-            setStats(details);
+            // FIX: Используем targetStats вместо несуществующей переменной details
+            const statsDetails = Object.keys(targetStats)
+              .filter(key => key !== "date" && key !== "total")
+              .map(key => ({
+                label: LABELS[key] || key,
+                amount: parseFloat(targetStats[key] || 0)
+              }));
+            
+            setStats(statsDetails);
 
-            // Fetch Chance count
-            fetch(`https://alpha.date/api/chance/chats/count`, {
-              method: "GET",
-              headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            }).then(r => r.json()).then(data => {
-              if (data && data.response) setChanceCount(data.response.count);
-            }).catch(() => { });
+            // Fetch Chance count. Alpha sometimes removes this endpoint; after 404 do not spam console.
+            if (sessionStorage.getItem("snatch_chance_count_404") !== "1") {
+              fetch(`https://alpha.date/api/chance/chats/count`, {
+                method: "GET",
+                headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+              }).then(r => {
+                if (r.status === 404) {
+                  sessionStorage.setItem("snatch_chance_count_404", "1");
+                  return null;
+                }
+                return r.json();
+              }).then(data => {
+                if (data && data.response) setChanceCount(data.response.count);
+              }).catch(() => { });
+            }
           }
         } catch (error) {
           console.error("[Earnings] Error:", error);
@@ -38790,7 +38840,8 @@ styleSheet.flush()
         mediaEl.dataset.blurSetup = "1";
 
         const img = mediaEl.querySelector("img");
-        if (!img) return;
+        // Не выходим если нет img — видео-элементы могут не иметь <img>,
+        // но блюр через backdropFilter работает без него
 
         mediaEl.style.position = "relative";
 
@@ -38986,36 +39037,20 @@ styleSheet.flush()
 
         const wrap = document.createElement("span");
         wrap.className = "ah-translate-wrap";
-        wrap.style.cssText = "display:inline-flex;align-items:center;margin-left:5px;vertical-align:middle;";
+        // FIX CSP: Убираем inline-стили, используем только класс
 
         const btn = document.createElement("button");
         btn.className = "ah-translate-btn";
         btn.title = "Перевести";
-        btn.style.cssText = [
-          "display:inline-flex",
-          "align-items:center",
-          "justify-content:center",
-          "background:rgba(var(--sa-rgb,255,107,53),0.08)",
-          "border:1px solid rgba(var(--sa-rgb,255,107,53),0.25)",
-          "border-radius:50%",
-          "width:18px",
-          "height:18px",
-          "font-size:11px",
-          "line-height:1",
-          "cursor:pointer",
-          "transition:all 0.2s",
-          "padding:0",
-          "flex-shrink:0",
-        ].join(";");
+        // FIX CSP: Убираем inline-стили, все стили в CSS классе
         btn.innerHTML = "&#127760;";
 
+        // FIX CSP: Используем classList вместо inline-стилей
         btn.addEventListener("mouseenter", () => {
-          btn.style.background = "rgba(var(--sa-rgb,255,107,53),0.18)";
-          btn.style.transform = "scale(1.15)";
+          btn.classList.add("ah-translate-btn-hover");
         });
         btn.addEventListener("mouseleave", () => {
-          btn.style.background = "rgba(var(--sa-rgb,255,107,53),0.08)";
-          btn.style.transform = "scale(1)";
+          btn.classList.remove("ah-translate-btn-hover");
         });
 
         btn.addEventListener("click", async (e) => {
@@ -39023,18 +39058,16 @@ styleSheet.flush()
           // Если уже переведено — скрыть/показать (toggle)
           const existing = msgNode.querySelector(".ah-translation-block");
           if (existing) {
-            const isNowHidden = existing.style.display === "none";
-            existing.style.display = isNowHidden ? "" : "none";
-            btn.innerHTML = isNowHidden ? "&#128064;" : "&#127760;";
-            btn.title = isNowHidden ? "Скрыть перевод" : "Перевести";
-            btn.style.opacity = "1";
+            const isHidden = existing.classList.contains("ah-hidden");
+            existing.classList.toggle("ah-hidden");
+            btn.innerHTML = isHidden ? "&#128064;" : "&#127760;";
+            btn.title = isHidden ? "Скрыть перевод" : "Перевести";
             return;
           }
           // Впервые переводим
           const prevHTML = btn.innerHTML;
           btn.innerHTML = "⏳";
           btn.disabled = true;
-          btn.style.opacity = "1";
           let translated = null;
           try { translated = await translateText(origText, source, target); } catch (err) { }
           btn.disabled = false;
@@ -39046,7 +39079,6 @@ styleSheet.flush()
           appendTranslation(msgNode, insertTarget, translated);
           btn.innerHTML = "&#128064;";
           btn.title = "Скрыть перевод";
-          btn.style.opacity = "1";
         });
 
         wrap.append(btn);
@@ -39072,17 +39104,7 @@ styleSheet.flush()
 
       const block = document.createElement("div");
       block.className = "ah-translation-block";
-      block.style.cssText = [
-        "margin-top:4px",
-        "padding:4px 8px",
-        "border-radius:6px",
-        "background:rgba(0,0,0,0.04)",
-        "font-size:12px",
-        "color:#636e72",
-        "line-height:1.5",
-        "font-style:italic",
-        "white-space:pre-wrap"
-      ].join(";");
+      // FIX CSP: Убираем inline-стили, используем только класс
       block.textContent = translated;
 
       // Вставляем после wrap (кнопки) если есть, иначе после текста
@@ -39146,7 +39168,7 @@ styleSheet.flush()
           textDiv.querySelector(".ah-letter-translation")?.remove();
           const block = document.createElement("div");
           block.className = "ah-letter-translation";
-          block.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.04);font-size:13px;color:#636e72;line-height:1.5;font-style:italic;border-left:3px solid rgba(var(--sa-rgb,255,107,53),0.4);white-space:pre-wrap;";
+          // FIX CSP: Убираем inline-стили
           block.textContent = translated;
           textDiv.appendChild(block);
         } else {
@@ -39154,19 +39176,19 @@ styleSheet.flush()
           if (textDiv.querySelector(".ah-letter-translate-wrap")) continue;
           const wrap = document.createElement("span");
           wrap.className = "ah-letter-translate-wrap";
-          wrap.style.cssText = "display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle;";
+          // FIX CSP: Убираем inline-стили
           const btn = document.createElement("button");
           btn.className = "ah-translate-btn ah-letter-translate-btn";
           btn.title = "Перевести письмо";
           btn.innerHTML = "&#127760;";
-          btn.style.cssText = "display:inline-flex;align-items:center;justify-content:center;background:rgba(var(--sa-rgb,255,107,53),0.08);border:1px solid rgba(var(--sa-rgb,255,107,53),0.25);border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;transition:all 0.2s;padding:0;flex-shrink:0;";
+          // FIX CSP: Убираем inline-стили
           const capturedText = origText;
           btn.addEventListener("click", async (ev) => {
             ev.stopPropagation();
             const existing = textDiv.querySelector(".ah-letter-translation");
             if (existing) {
-              const hidden = existing.style.display === "none";
-              existing.style.display = hidden ? "" : "none";
+              const hidden = existing.classList.contains("ah-hidden");
+              existing.classList.toggle("ah-hidden");
               btn.innerHTML = hidden ? "&#128064;" : "&#127760;";
               btn.title = hidden ? "Скрыть перевод" : "Перевести письмо";
               return;
@@ -39179,7 +39201,7 @@ styleSheet.flush()
             textDiv.querySelector(".ah-letter-translation")?.remove();
             const block = document.createElement("div");
             block.className = "ah-letter-translation";
-            block.style.cssText = "margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.04);font-size:13px;color:#636e72;line-height:1.5;font-style:italic;border-left:3px solid rgba(var(--sa-rgb,255,107,53),0.4);white-space:pre-wrap;";
+            // FIX CSP: Убираем inline-стили
             block.textContent = translated;
             textDiv.appendChild(block);
             btn.innerHTML = "&#128064;"; btn.title = "Скрыть перевод";
@@ -39217,6 +39239,23 @@ styleSheet.flush()
         applyTranslation(node, src, tgt, mode);
       });
     }
+
+    window.__snatchForceTranslateChat = function() {
+      try {
+        chrome.storage.local.get("telescopeSettings", (result) => {
+          const settings = result?.telescopeSettings || {};
+          if (!settings.translateEnabled) settings.translateEnabled = true;
+          document.querySelectorAll("[data-ah-translated]").forEach(el => { delete el.dataset.ahTranslated; });
+          document.querySelectorAll(".ah-translate-wrap, .ah-translation-block").forEach(el => el.remove());
+          _translateCache.clear();
+          processAllMessages(settings, true);
+        });
+      } catch (e) {
+        document.querySelectorAll("[data-ah-translated]").forEach(el => { delete el.dataset.ahTranslated; });
+        document.querySelectorAll(".ah-translate-wrap, .ah-translation-block").forEach(el => el.remove());
+      }
+    };
+    window.addEventListener("snatch-force-translate-chat", () => window.__snatchForceTranslateChat());
 
     // === Обработчик клавиатуры для скрытия UI (H или Р) ===
     function setupKeyboardToggle() {
@@ -39295,9 +39334,95 @@ styleSheet.flush()
             window.dispatchEvent(new CustomEvent('snatch-force-replace'));
           }
 
-          console.log(`[Snatch] UI ${isHidden ? 'скрыт' : 'показан'} (клавиша: ${e.key})`);
+
         }
       });
+    }
+
+    // FIX CSP: CSS стили для перевода (вместо inline-стилей)
+    const translateStyles = document.createElement("style");
+    translateStyles.id = "ah-translate-styles";
+    translateStyles.textContent = `
+      /* Обертка кнопки перевода */
+      .ah-translate-wrap {
+        display: inline-flex !important;
+        align-items: center !important;
+        margin-left: 5px !important;
+        vertical-align: middle !important;
+      }
+      
+      /* Кнопка перевода */
+      .ah-translate-btn {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: rgba(var(--sa-rgb, 255, 107, 53), 0.08) !important;
+        border: 1px solid rgba(var(--sa-rgb, 255, 107, 53), 0.25) !important;
+        border-radius: 50% !important;
+        width: 18px !important;
+        height: 18px !important;
+        font-size: 11px !important;
+        line-height: 1 !important;
+        cursor: pointer !important;
+        transition: all 0.2s !important;
+        padding: 0 !important;
+        flex-shrink: 0 !important;
+      }
+      
+      /* Hover эффект для кнопки */
+      .ah-translate-btn-hover,
+      .ah-translate-btn:hover {
+        background: rgba(var(--sa-rgb, 255, 107, 53), 0.18) !important;
+        transform: scale(1.15) !important;
+      }
+      
+      /* Блок перевода */
+      .ah-translation-block {
+        margin-top: 4px !important;
+        padding: 4px 8px !important;
+        border-radius: 6px !important;
+        background: rgba(0, 0, 0, 0.04) !important;
+        font-size: 12px !important;
+        color: #636e72 !important;
+        line-height: 1.5 !important;
+        font-style: italic !important;
+        white-space: pre-wrap !important;
+      }
+      
+      /* Скрытый блок */
+      .ah-hidden {
+        display: none !important;
+      }
+      
+      /* Стили для писем */
+      .ah-letter-translate-wrap {
+        display: inline-flex !important;
+        align-items: center !important;
+        margin-left: 6px !important;
+        vertical-align: middle !important;
+      }
+      
+      .ah-letter-translate-btn {
+        width: 20px !important;
+        height: 20px !important;
+        font-size: 12px !important;
+      }
+      
+      .ah-letter-translation {
+        margin-top: 6px !important;
+        padding: 6px 10px !important;
+        border-radius: 6px !important;
+        background: rgba(0, 0, 0, 0.04) !important;
+        font-size: 13px !important;
+        color: #636e72 !important;
+        line-height: 1.5 !important;
+        font-style: italic !important;
+        border-left: 3px solid rgba(var(--sa-rgb, 255, 107, 53), 0.4) !important;
+        white-space: pre-wrap !important;
+      }
+    `;
+    if (!document.getElementById("ah-translate-styles")) {
+      document.head.appendChild(translateStyles);
     }
 
     // CSS для ah-ui-hidden — скрываем только элементы расширения
@@ -39417,12 +39542,15 @@ styleSheet.flush()
       body.ah-ui-hidden .translit-btn { display: none !important; }
       /* Snatch — Кнопка поиска по чату */
       body.ah-ui-hidden .chat-search-btn { display: none !important; }
+      body.ah-ui-hidden .chat-force-translate-btn { display: none !important; }
       /* Snatch — Бейджи C/L/CL и значки глаза */
       body.ah-ui-hidden .adgm-badge { display: none !important; }
       body.ah-ui-hidden .adgm-view-marker { display: none !important; }
       /* Snatch — Кнопка фильтра и справки в галерее */
       body.ah-ui-hidden .adgm-btn { display: none !important; }
       body.ah-ui-hidden .adgm-help-btn { display: none !important; }
+      /* Snatch — Кнопка буфера обмена */
+      body.ah-ui-hidden .clipboard-buffer-btn { display: none !important; }
     `;
     if (!document.getElementById("ah-hide-style")) {
       document.head.appendChild(hideStyle);
@@ -39794,17 +39922,38 @@ styleSheet.flush()
       (0, react.useEffect)(() => {
         if (!settings) return;
         let profileDebounce = null;
+        
+        // FIX CSP: Оптимизируем MutationObserver с debounce и throttle
+        let observerTimeout = null;
+        let lastObserverRun = 0;
+        const MIN_OBSERVER_INTERVAL = 200; // Минимум 200ms между обработками
+        
         const observer = new MutationObserver((mutations) => {
-          for (const mutation of mutations) {
-            mutation.addedNodes.forEach((n) => {
-              if (n.nodeType !== Node.ELEMENT_NODE) return;
-              const node = n;
+          const now = Date.now();
+          
+          // Throttle: пропускаем если прошло меньше MIN_OBSERVER_INTERVAL
+          if (now - lastObserverRun < MIN_OBSERVER_INTERVAL) {
+            return;
+          }
+          
+          // Debounce
+          if (observerTimeout) {
+            clearTimeout(observerTimeout);
+          }
+          
+          observerTimeout = setTimeout(() => {
+            lastObserverRun = Date.now();
+            
+            for (const mutation of mutations) {
+              mutation.addedNodes.forEach((n) => {
+                if (n.nodeType !== Node.ELEMENT_NODE) return;
+                const node = n;
 
-              if (settings.blurIncoming &&
-                (node.dataset?.testid?.includes("received-message") ||
-                  node.classList?.contains("styles_clmn_3_chat_scroll__8HT4T"))) {
-                blurMedias(node, [], null);
-              }
+                if (settings.blurIncoming &&
+                  (node.dataset?.testid?.includes("received-message") ||
+                    node.classList?.contains("styles_clmn_3_chat_scroll__8HT4T"))) {
+                  blurMedias(node, [], null);
+                }
               if (settings.blurOutgoing &&
                 node.dataset?.testid?.includes("sent-message")) {
                 blurMedias(node, [], null);
@@ -39854,27 +40003,41 @@ styleSheet.flush()
               }, 200);
             }
           }
+          }, 100); // Debounce 100ms
         });
         // Убрали characterData: true — он срабатывал на каждое нажатие клавиши
         observer.observe(document.body, {
           childList: true,
           subtree: true,
         });
-        return () => { observer.disconnect(); clearTimeout(profileDebounce); };
+        return () => { 
+          observer.disconnect(); 
+          clearTimeout(profileDebounce);
+          if (observerTimeout) {
+            clearTimeout(observerTimeout);
+          }
+        };
       }, [settings, openedImages, currentProfileId]);
 
       (0, react.useEffect)(() => {
         if (!settings?.blurIncoming && !settings?.blurOutgoing) return;
-        document
-          .querySelectorAll('[data-testid="message-image"], [data-testid="message-video"]')
-          .forEach((m) => {
-            const p = m.parentNode; if (!p) return;
-            const tid = p.dataset?.testid || "";
-            // blurMedias теперь самодостаточен — openedImages не нужен
-            if (settings.blurIncoming && tid.includes("received-message")) blurMedias(p, [], null);
-            if (settings.blurOutgoing && tid.includes("sent-message")) blurMedias(p, [], null);
-          });
-      }, [settings?.blurIncoming, settings?.blurOutgoing]);
+        // Задержка нужна чтобы DOM успел отрисоваться при смене чата
+        const t = setTimeout(() => {
+          document
+            .querySelectorAll('[data-testid="message-image"], [data-testid="message-video"]')
+            .forEach((m) => {
+              // Используем closest() вместо parentNode — родитель может быть не сразу,
+              // а через несколько уровней вложенности
+              const p = m.closest('[data-testid*="received-message"], [data-testid*="sent-message"]');
+              if (!p) return;
+              const tid = p.dataset?.testid || "";
+              // blurMedias теперь самодостаточен — openedImages не нужен
+              if (settings.blurIncoming && tid.includes("received-message")) blurMedias(p, [], null);
+              if (settings.blurOutgoing && tid.includes("sent-message")) blurMedias(p, [], null);
+            });
+        }, 700);
+        return () => clearTimeout(t);
+      }, [settings?.blurIncoming, settings?.blurOutgoing, currentProfileId]);
 
       // Перевод — при загрузке + при смене настроек + при смене чата
       (0, react.useEffect)(() => {
@@ -39923,7 +40086,7 @@ styleSheet.flush()
      * Injects functionality into web pages (Telegram Web, alpha.date)
      */
 
-    console.log("Telescope content script loaded");
+
     // Initialize on DOM ready
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", init);
@@ -39931,12 +40094,12 @@ styleSheet.flush()
       init();
     }
     function init() {
-      console.log("Initializing Telescope features...");
+
       // Check if user is logged in (has token)
       const token = localStorage.getItem("token");
       if (token) chrome.storage.local.set({ alpha_token: token });
       if (!token) {
-        console.log("No token found, skipping Telescope features");
+
         return;
       }
       // Check if we're on alpha.date
@@ -39966,7 +40129,7 @@ styleSheet.flush()
         }),
       );
 
-      console.log("Telescope content script initialized");
+
     }
   })();
 
@@ -39974,7 +40137,7 @@ styleSheet.flush()
 
   // --- ФИНАЛЬНЫЙ МОДУЛЬ БАЛАНСА v5 (Под структуру Grouped) ---
 
-  console.log("[Telescope] Inject скрипт загружен v5 (Grouped Parser)");
+
 
   let balanceCache = { data: null, lastUpdate: 0, ttl: 30000 };
 
@@ -39987,7 +40150,7 @@ styleSheet.flush()
         balanceCache.data &&
         now - balanceCache.lastUpdate < balanceCache.ttl
       ) {
-        console.log("[Telescope] Отдаю кэш");
+
         sendResponse(balanceCache.data);
         return true;
       }
@@ -40018,7 +40181,7 @@ styleSheet.flush()
           if (!response.ok) throw new Error(`Status: ${response.status}`);
 
           const data = await response.json();
-          console.log("[Telescope DEBUG] Ответ:", data);
+
 
           let total = 0;
 
@@ -40038,7 +40201,7 @@ styleSheet.flush()
             }
           }
 
-          console.log("[Telescope] Баланс из total:", total);
+
 
           const result = { total: total, cached: false };
           balanceCache.data = result;

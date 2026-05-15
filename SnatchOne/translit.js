@@ -35,21 +35,22 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 8px 14px;
-        background: #f5f5f5;
-        color: #333;
-        border: 1px solid #ddd;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 600;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        background: transparent;
+        color: #2d9d8f;
+        border: 1.5px solid #2d9d8f;
+        border-radius: 50%;
+        font-size: 13px;
+        font-weight: 700;
         cursor: pointer;
         transition: all 0.2s ease;
-        margin-right: 8px;
-        min-width: 50px;
-        height: 36px;
+        margin: 0 3px;
+        flex-shrink: 0;
       }
-      .translit-btn:hover { background: #e8e8e8; border-color: #ccc; }
-      .translit-btn:active { background: #ddd; transform: scale(0.98); }
+      .translit-btn:hover { background: rgba(45,157,143,0.1); border-color: #1f7a70; color: #1f7a70; }
+      .translit-btn:active { transform: scale(0.95); }
     `;
     document.head.appendChild(style);
   }
@@ -153,20 +154,31 @@
   function init() {
     addStyles();
     setTimeout(insertButtonForLetters, 300);
-  }
 
-  let lastUrl = location.href;
-  setInterval(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      setTimeout(insertButtonForLetters, 500);
-    }
-    
-    // Проверяем что кнопка есть, если нет - вставляем
-    if (!document.querySelector('.translit-btn')) {
-      insertButtonForLetters();
-    }
-  }, 3000);
+    // MutationObserver: следим за DOM для динамической вставки кнопки
+    let lastUrl = location.href;
+    const observer = new MutationObserver(() => {
+      const currentUrl = location.href;
+      if (currentUrl !== lastUrl) {
+        lastUrl = currentUrl;
+        setTimeout(insertButtonForLetters, 300);
+        return;
+      }
+      // Если кнопка пропала (смена чата/UI перерисовка) — вставляем снова
+      if (!document.querySelector('.translit-btn')) {
+        insertButtonForLetters();
+      }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // Fallback: проверка каждые 5 секунд (на случай если MutationObserver пропустит)
+    setInterval(() => {
+      if (!document.querySelector('.translit-btn')) {
+        insertButtonForLetters();
+      }
+    }, 5000);
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);

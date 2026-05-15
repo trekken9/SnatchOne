@@ -273,6 +273,10 @@ function getSession(authHash) {
         chat: 0,
         letters: 0,
         errors: 0,
+        chatSuccess: 0,
+        chatErrors: 0,
+        letterSuccess: 0,
+        letterErrors: 0,
       },
       totalStats: { chat: 0, letters: 0 }, // Накопленная статистика за всё время
       rotationState: new Map(),
@@ -663,28 +667,35 @@ app.get("/admin/api/status", authenticateToken, (req, res) => {
 });
 
 // --- НОВЫЙ API: Получить всех пользователей (Только для Админов) ---
+// CEO видит всех, Admin видит только свою ветку (creator_id)
 app.get("/admin/api/all_users", authenticateToken, (req, res) => {
   if (req.user.role !== "superadmin" && req.user.role !== "admin") {
     return res.status(403).json({ error: "Нет доступа" });
   }
 
-  // Получаем всех юзеров
-  db.all(
-    "SELECT id, username, role, nickname, avatar, telegram FROM users",
-    [],
-    (err, users) => {
-      if (err) return res.status(500).json({ error: "Ошибка БД" });
+  // Фильтрация по иерархии
+  let userQuery = "SELECT id, username, role, nickname, avatar, telegram, creator_id FROM users";
+  let userParams = [];
+  if (req.user.role === "admin") {
+    // Админ видит только пользователей, которых создал он сам
+    userQuery += " WHERE creator_id = ? OR id = ?";
+    userParams = [req.user.id, req.user.id];
+  }
 
-      // Получаем все лицензии, чтобы связать переводчиков и команды
-      db.all(
-        "SELECT key_hash, creator_id, translator_id FROM licenses",
-        [],
-        (err, licenses) => {
-          res.json({ users, licenses, role: req.user.role });
-        },
-      );
-    },
-  );
+  db.all(userQuery, userParams, (err, users) => {
+    if (err) return res.status(500).json({ error: "Ошибка БД" });
+
+    let licQuery = "SELECT key_hash, creator_id, translator_id FROM licenses";
+    let licParams = [];
+    if (req.user.role === "admin") {
+      licQuery += " WHERE creator_id = ?";
+      licParams = [req.user.id];
+    }
+
+    db.all(licQuery, licParams, (err, licenses) => {
+      res.json({ users, licenses, role: req.user.role });
+    });
+  });
 });
 
 // 4. API: Генерация ключей (Авто-создание аккаунта Переводчика)
@@ -863,7 +874,7 @@ app.post("/admin/api/delete_user", authenticateToken, (req, res) => {
 });
 
 app.post("/admin/api/users", authenticateToken, (req, res) => {
-  if (req.user.role !== "superadmin")
+  if (req.user.role !== "superadmin" && req.user.role !== "admin")
     return res.status(403).json({ error: "Нет прав" });
   const { username, password, role } = req.body;
   if (!username || !password || !role)
@@ -877,10 +888,15 @@ app.post("/admin/api/users", authenticateToken, (req, res) => {
     });
   }
 
+  // Админ не может создавать superadmin
+  if (req.user.role === "admin" && role === "superadmin") {
+    return res.status(403).json({ error: "Админ не может создавать CEO" });
+  }
+
   const passHash = bcrypt.hashSync(password, 10);
   db.run(
-    "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-    [username, passHash, role],
+    "INSERT INTO users (username, password, role, creator_id) VALUES (?, ?, ?, ?)",
+    [username, passHash, role, req.user.id],
     (err) => {
       if (err) return res.status(400).json({ error: "Этот логин уже занят!" });
       res.json({ success: true });
@@ -1051,6 +1067,123 @@ app.post("/api/extend", authenticateToken, (req, res) => {
       if (err) return res.status(500).json({ error: "DB error" });
       res.json({ success: true });
     },
+  );
+});
+
+// ══════════════════════════════════════════════════════════
+// БЛОК 2: MANS READ-THROUGH CACHE & DECREASE TIME
+// ══════════════════════════════════════════════════════════
+
+// ── Read-Through Cache: Получить данные мужчины (balance/dob) ──
+// Если данные свежие (< 5 мин) — отдаём из кэша.
+// Иначе — fetch к внешнему API с таймаутом 5с, UPSERT в БД.
+// ── Синхронизация данных мужчины от расширения ──
+app.post("/api/mans/sync", async (req, res) => {
+  const { manId, spend, reg_date } = req.body;
+  if (!manId) return res.status(400).json({ error: "Нет man_id" });
+
+  const numSpend = parseFloat(spend) || 0;
+  const now = Date.now();
+
+  db.run(
+    `REPLACE INTO mans (man_id, spend, reg_date, last_updated) VALUES (?, ?, ?, ?)`,
+    [manId, numSpend, reg_date || null, now],
+    (err) => {
+      if (err) {
+        console.error("❌ Ошибка синхронизации mans:", err);
+        return res.status(500).json({ error: "DB Error" });
+      }
+      res.json({ success: true });
+    }
+  );
+});
+
+// Сохраняем старый GET на всякий случай для админки, если потребуется читать из нашей БД
+app.get("/api/mans/:id", async (req, res) => {
+  const manId = req.params.id;
+  db.get("SELECT * FROM mans WHERE man_id = ?", [manId], (err, row) => {
+    if (err || !row) return res.status(404).json({ error: "Нет данных" });
+    res.json(row);
+  });
+});
+
+// ── Список мужчин с фильтрацией (для таблицы в админке) ──
+app.get("/api/mans", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin" && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Нет доступа" });
+  }
+
+  const { search, min_spend, max_spend, from_date, to_date } = req.query;
+  const page = Math.max(1, parseInt(req.query.page) || 1);
+  const limit = Math.min(100, Math.max(10, parseInt(req.query.limit) || 50));
+  const offset = (page - 1) * limit;
+
+  let where = [];
+  let params = [];
+
+  if (search) {
+    where.push("man_id LIKE ?");
+    params.push(`%${search}%`);
+  }
+  if (min_spend) {
+    where.push("spend >= ?");
+    params.push(parseFloat(min_spend));
+  }
+  if (max_spend) {
+    where.push("spend <= ?");
+    params.push(parseFloat(max_spend));
+  }
+  if (from_date) {
+    where.push("reg_date >= ?");
+    params.push(from_date);
+  }
+  if (to_date) {
+    where.push("reg_date <= ?");
+    params.push(to_date);
+  }
+
+  const whereClause = where.length > 0 ? "WHERE " + where.join(" AND ") : "";
+
+  // Получаем общее количество
+  db.get(`SELECT COUNT(*) as total FROM mans ${whereClause}`, params, (err, countRow) => {
+    if (err) return res.status(500).json({ error: "Ошибка БД" });
+
+    const total = countRow?.total || 0;
+
+    db.all(
+      `SELECT * FROM mans ${whereClause} ORDER BY spend DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset],
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: "Ошибка БД" });
+        res.json({
+          mans: rows || [],
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit)
+        });
+      }
+    );
+  });
+});
+
+// ── Decrease license time (CEO only) ──
+app.post("/api/decrease-time", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin") {
+    return res.status(403).json({ error: "Нет прав. Откат доступен только CEO." });
+  }
+  const { keyHash, days = 1 } = req.body;
+  const safeDays = Math.min(Math.max(parseInt(days) || 1, 1), 365);
+  if (!keyHash) return res.status(400).json({ error: "Нет keyHash" });
+  const subtractMs = safeDays * 86400000;
+
+  db.run(
+    "UPDATE licenses SET exp_time_ms = exp_time_ms - ? WHERE key_hash = ?",
+    [subtractMs, keyHash],
+    (err) => {
+      if (err) return res.status(500).json({ error: "DB error" });
+      res.json({ success: true });
+    }
   );
 });
 
@@ -1529,6 +1662,7 @@ wss.on("connection", (ws, req) => {
 
   const session = getSession(authHash);
   session.ws = ws;
+  session.connectedAt = Date.now();
 
   console.log(
     `🌐 [${ip}] ПОДКЛЮЧЕНИЕ: Ключ ${authHash.substring(0, 8)}... (Session: ${SESSIONS.size})`,
@@ -1543,6 +1677,9 @@ wss.on("connection", (ws, req) => {
     console.error(
       `🔌 ОШИБКА СОКЕТА [${authHash.substring(0, 8)}]:`,
       err.message,
+    );
+    global.logForOperator(session.operatorName, "ERROR",
+      `🔌 [${authHash.substring(0, 8)}] ОШИБКА СОКЕТА: ${err.message} (code: ${err.code || "нет"})`,
     );
   });
 
@@ -1660,11 +1797,26 @@ wss.on("connection", (ws, req) => {
             `✅ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] УСПЕШНО ДОСТАВЛЕНО`,
           );
           global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] ✅ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] УСПЕШНО ДОСТАВЛЕНО`);
+          // Учитываем тип (чат или письмо) для детальной статистики
+          if (session.stats) {
+            if (msg.type === "letter" || (session._lastSendType === "letter")) {
+              session.stats.letterSuccess = (session.stats.letterSuccess || 0) + 1;
+            } else {
+              session.stats.chatSuccess = (session.stats.chatSuccess || 0) + 1;
+            }
+          }
         } else {
           console.log(
             `❌ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] ОШИБКА: ${responseMessage}`,
           );
           global.logForOperator(session.operatorName, "INFO", `[${authHash.substring(0, 8)}] ❌ [${formatUser(session, myId)} -> ${formatUser(session, manId)}] ОШИБКА: ${responseMessage}`);
+          if (session.stats) {
+            if (msg.type === "letter" || (session._lastSendType === "letter")) {
+              session.stats.letterErrors = (session.stats.letterErrors || 0) + 1;
+            } else {
+              session.stats.chatErrors = (session.stats.chatErrors || 0) + 1;
+            }
+          }
 
           const isStopError = /already received|Restriction/i.test(
             responseMessage,
@@ -1686,7 +1838,9 @@ wss.on("connection", (ws, req) => {
           }
 
           // Плюсуем ошибку в стату сессии
-          session.stats.errors++;
+          if (session.stats) {
+            session.stats.errors++;
+          }
         }
         return;
       }
@@ -1885,6 +2039,8 @@ wss.on("connection", (ws, req) => {
                 }
 
                 session.stats.chat++;
+                session.stats.chatSuccess = (session.stats.chatSuccess || 0) + 1;
+                session._lastSendType = "chat";
                 if (!session.totalStats) session.totalStats = { chat: 0, letters: 0 };
                 session.totalStats.chat++;
                 persistTotalStats(authHash, session);
@@ -1976,6 +2132,8 @@ wss.on("connection", (ws, req) => {
                 );
 
                 session.stats.letters++;
+                session.stats.letterSuccess = (session.stats.letterSuccess || 0) + 1;
+                session._lastSendType = "letter";
                 if (!session.totalStats) session.totalStats = { chat: 0, letters: 0 };
                 session.totalStats.letters++;
                 persistTotalStats(authHash, session);
@@ -2026,13 +2184,181 @@ wss.on("connection", (ws, req) => {
     clearInterval(statsInterval);
     clearInterval(pingInterval);
 
-    // Код 1006 — это обычно разрыв по тайм-ауту (Nginx или Cloudflare)
-    // Код 1000 — нормальное закрытие
-    const reasonStr = reason.toString() || "причина не указана";
-    console.log(
-      `📡 [${authHash.substring(0, 8)}] ДИСКОННЕКТ! Код: ${code} | Причина: ${reasonStr}`,
-    );
-    // Детализированный лог дисконнекта в папку оператора
-    global.logForOperator(session.operatorName, "INFO", `📡 [${authHash.substring(0, 8)}] ДИСКОННЕКТ! Код: ${code} | Причина: ${reasonStr}`);
+    // Расшифровка кодов закрытия WebSocket
+    const closeCodeMap = {
+      1000: "Нормальное закрытие (клиент/сервер закрыл сам)",
+      1001: "Endpoint уходит (CloudFlare/Nginx перезапуск прокси)",
+      1002: "Ошибка протокола",
+      1003: "Неподдерживаемый тип данных",
+      1005: "Нет кода закрытия (обрыв без кода — обычно клиент закрыл вкладку)",
+      1006: "Аномальное закрытие (обрыв соединения — тайм-аут Nginx/CF или сеть)",
+      1007: "Невалидные данные",
+      1008: "Нарушение политики",
+      1009: "Сообщение слишком большое",
+      1010: "Расширение не согласовано",
+      1011: "Внутренняя ошибка сервера",
+      1012: "Сервер перезапускается",
+      1013: "Попробуйте позже",
+      1014: "Плохой шлюз",
+      1015: "TLS ошибка рукопожатия",
+    };
+    const codeDesc = closeCodeMap[code] || "Неизвестный код";
+
+    // Определяем вероятную сторону разрыва
+    let sideDiag = "";
+    if (code === 1000) sideDiag = "🟢 Сторона: нормальное завершение";
+    else if (code === 1001) sideDiag = "🔵 Сторона: СЕРВЕР (прокси/CF перезапуск)";
+    else if (code === 1005) sideDiag = "🟡 Сторона: КЛИЕНТ (закрыл вкладку / сеть клиента)";
+    else if (code === 1006) sideDiag = "🔴 Сторона: СЕТЬ (тайм-аут CF/Nginx или обрыв интернета у клиента)";
+    else if (code >= 1011 && code <= 1014) sideDiag = "🔴 Сторона: СЕРВЕР (ошибка сервера)";
+    else sideDiag = "⚪ Сторона: не определена";
+
+    const reasonStr = reason?.toString() || "причина не указана";
+    const uptime = session?.connectedAt ? Math.floor((Date.now() - session.connectedAt) / 1000) : null;
+    const uptimeStr = uptime !== null ? `| Время сессии: ${uptime}с` : "";
+
+    const disconnectMsg = `📡 [${authHash.substring(0, 8)}] ДИСКОННЕКТ! Код: ${code} | Причина: ${reasonStr}`;
+    const detailMsg = `   ↳ ${codeDesc} | ${sideDiag} ${uptimeStr}`;
+
+    console.log(disconnectMsg);
+    console.log(detailMsg);
+
+    global.logForOperator(session.operatorName, "INFO", disconnectMsg);
+    global.logForOperator(session.operatorName, "INFO", detailMsg);
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+// FIX 5: API — получить логи конкретного оператора (по keyHash)
+// ══════════════════════════════════════════════════════════
+app.get("/admin/api/operator-logs/:keyHash", authenticateToken, (req, res) => {
+  const { keyHash } = req.params;
+  if (!keyHash) return res.status(400).json({ error: "Нет keyHash" });
+
+  db.get("SELECT creator_id, translator_id, note FROM licenses WHERE key_hash = ?", [keyHash], (err, lic) => {
+    if (err || !lic) return res.status(404).json({ error: "Ключ не найден" });
+
+    const hasAccess =
+      req.user.role === "superadmin" ||
+      req.user.role === "admin" ||
+      (req.user.role === "team" && lic.creator_id === req.user.id) ||
+      (req.user.role === "translator" && lic.translator_id === req.user.id);
+
+    if (!hasAccess) return res.status(403).json({ error: "Нет доступа" });
+
+    const operatorName = lic.note;
+    if (!operatorName) return res.json({ logs: [] });
+
+    const safeName = String(operatorName).replace(/[\/\\:*?"<>|]/g, "_").trim() || "unknown";
+    const operatorDir = path.join(logsDir, "operators", safeName);
+
+    if (!fs.existsSync(operatorDir)) return res.json({ logs: [] });
+
+    // Читаем все лог-файлы этого оператора (последние 3 дня)
+    try {
+      const files = fs.readdirSync(operatorDir)
+        .filter(f => f.endsWith(".log"))
+        .sort()
+        .slice(-3); // последние 3 файла
+
+      const allLines = [];
+      for (const file of files) {
+        const content = fs.readFileSync(path.join(operatorDir, file), "utf-8");
+        allLines.push(...content.split("\n").filter(l => l.trim()));
+      }
+
+      // Возвращаем последние 500 строк
+      const lines = allLines.slice(-500);
+      res.json({ logs: lines, operatorName });
+    } catch (e) {
+      res.json({ logs: [], error: e.message });
+    }
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+// FIX 7: ANNOUNCEMENTS — таблица создаётся в db.js, но API здесь
+// ══════════════════════════════════════════════════════════
+
+// Создаём таблицу объявлений если не существует
+db.run(`CREATE TABLE IF NOT EXISTS announcements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  message TEXT NOT NULL,
+  created_by INTEGER,
+  created_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+  is_active INTEGER DEFAULT 1
+)`);
+
+// Таблица для записи кто уже видел объявление
+db.run(`CREATE TABLE IF NOT EXISTS announcement_views (
+  announcement_id INTEGER,
+  user_id INTEGER,
+  viewed_at INTEGER DEFAULT (strftime('%s','now') * 1000),
+  PRIMARY KEY (announcement_id, user_id)
+)`);
+
+// CEO создаёт объявление
+app.post("/admin/api/announcements", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin") {
+    return res.status(403).json({ error: "Только CEO может создавать объявления" });
+  }
+  const { message } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: "Текст не может быть пустым" });
+
+  db.run(
+    "INSERT INTO announcements (message, created_by) VALUES (?, ?)",
+    [message.trim(), req.user.id],
+    function(err) {
+      if (err) return res.status(500).json({ error: "DB error" });
+      res.json({ success: true, id: this.lastID });
+    }
+  );
+});
+
+// Получить активное объявление (для текущего пользователя — которое он ещё не видел)
+app.get("/admin/api/announcements/active", authenticateToken, (req, res) => {
+  db.get(
+    `SELECT a.* FROM announcements a
+     WHERE a.is_active = 1
+       AND a.id NOT IN (
+         SELECT announcement_id FROM announcement_views WHERE user_id = ?
+       )
+     ORDER BY a.created_at DESC LIMIT 1`,
+    [req.user.id],
+    (err, row) => {
+      if (err) return res.status(500).json({ error: "DB error" });
+      res.json({ announcement: row || null });
+    }
+  );
+});
+
+// Пользователь отмечает объявление как прочитанное
+app.post("/admin/api/announcements/:id/view", authenticateToken, (req, res) => {
+  const id = parseInt(req.params.id);
+  db.run(
+    "INSERT OR IGNORE INTO announcement_views (announcement_id, user_id) VALUES (?, ?)",
+    [id, req.user.id],
+    (err) => {
+      if (err) return res.status(500).json({ error: "DB error" });
+      res.json({ success: true });
+    }
+  );
+});
+
+// Получить список всех объявлений (только CEO)
+app.get("/admin/api/announcements", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin") return res.status(403).json({ error: "Нет доступа" });
+  db.all("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 20", [], (err, rows) => {
+    if (err) return res.status(500).json({ error: "DB error" });
+    res.json({ announcements: rows || [] });
+  });
+});
+
+// Деактивировать объявление (CEO)
+app.post("/admin/api/announcements/:id/deactivate", authenticateToken, (req, res) => {
+  if (req.user.role !== "superadmin") return res.status(403).json({ error: "Нет доступа" });
+  db.run("UPDATE announcements SET is_active = 0 WHERE id = ?", [parseInt(req.params.id)], (err) => {
+    if (err) return res.status(500).json({ error: "DB error" });
+    res.json({ success: true });
   });
 });

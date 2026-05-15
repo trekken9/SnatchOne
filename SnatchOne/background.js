@@ -768,6 +768,43 @@ async function proxyFetch(e) {
       }
     } catch {}
   try {
+    // --- SNATCH LOGGING ---
+    if (e.path && typeof e.path === 'string') {
+      const isChat = e.path.includes('sendMessage') || e.path.includes('sendAction') || e.path.includes('sendChat');
+      const isLetter = e.path.includes('sendLetter') || e.path.includes('sendMail');
+      if (isChat || isLetter) {
+        try {
+          let girlId = '?', manId = '?', msgText = '';
+          if (e.body) {
+            const reqBody = JSON.parse(b64ToUtf8(e.body));
+            girlId = reqBody.woman_id || reqBody.woman_external_id || reqBody.profile_id || '?';
+            manId = reqBody.man_id || reqBody.man_external_id || reqBody.user_id || '?';
+            msgText = reqBody.message || reqBody.message_content || reqBody.text || '';
+          }
+          const isError = r.status >= 400 || (s && b64ToUtf8(s).toLowerCase().includes('"error"'));
+          const status = isError ? "error" : "ok";
+          
+          const logEntry = {
+            time: Date.now(),
+            hash: lastHash || e.hash || "",
+            operatorId: lastHeaders?.["SN-OperatorID"] || e.opId || "",
+            type: isChat ? "chat" : "letter",
+            status: status,
+            girl: String(girlId),
+            man: String(manId),
+            message: msgText.substring(0, 100)
+          };
+          chrome.storage.local.get("snLogs", (data) => {
+            let logs = data.snLogs || [];
+            logs.unshift(logEntry);
+            if (logs.length > 200) logs.length = 200;
+            chrome.storage.local.set({ snLogs: logs });
+          });
+        } catch (err) { console.error("Logging err", err); }
+      }
+    }
+    // --- END LOGGING ---
+
     snWs?.send(
       JSON.stringify({
         id: e.id,
@@ -1267,7 +1304,7 @@ async function makeBackup() {
   if (!e?.ok) return void console.warn("[AB] no payload");
   const t = new Date(),
     a = (e) => String(e).padStart(2, "0"),
-    r = `alpha_helper_backup_${t.getFullYear()}-${a(t.getMonth() + 1)}-${a(t.getDate())}_${a(t.getHours())}-${a(t.getMinutes())}-${a(t.getSeconds())}.json`,
+    r = `snatch_backup_${t.getFullYear()}-${a(t.getMonth() + 1)}-${a(t.getDate())}_${a(t.getHours())}-${a(t.getMinutes())}-${a(t.getSeconds())}.json`,
     s =
       "data:application/json;base64," +
       btoa(unescape(encodeURIComponent(e.json)));
@@ -1962,6 +1999,21 @@ async function enableSenderForProfile(profile, type, token) {
       }
       return true;
     }
+    if ("loadHeavyInject" === e?.cmd) {
+      if (!t.tab?.id) return true;
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: t.tab.id, frameIds: [t.frameId || 0] },
+          files: ["inject.js"],
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.warn("[inject-loader]", chrome.runtime.lastError.message);
+          }
+        },
+      );
+      return true;
+    }
     if ("enableAllSenders" === e?.cmd) {
       processEnableSenders()
         .then(() => a({ ok: true }))
@@ -2019,21 +2071,48 @@ function ensureWsPort(e) {
       }));
   }));
 
-// --- БАЛАНС + SPEND МУЖЧИНЫ ---
+// --- БАЛАНС + SPEND МУЖЧИНЫ (перехват с чужого сервера + синхронизация с нашим) ---
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.type === "getBalance") {
-    fetch("http://45.82.255.216:8080/balanceUdp/" + request.profileId)
-      .then((r) => r.json())
-      .then((data) => sendResponse({ balance: data.balance, dob: data.dob }))
-      .catch(() => sendResponse({ error: "Нет связи" }));
-    return true;
-  }
-  // Спенд мужчины с внешнего сервера
-  if (request.type === "getManSpend") {
-    fetch("http://45.82.255.216:8080/balanceUdp/" + request.manId)
-      .then((r) => r.json())
-      .then((data) => sendResponse({ spend: data.balance, dob: data.dob }))
-      .catch(() => sendResponse({ error: "Нет связи" }));
+  if (request.type === "getBalance" || request.type === "getManSpend") {
+    const manId = request.profileId || request.manId;
+    if (!manId) { sendResponse({ error: "Нет ID" }); return true; }
+
+    const udpUrl = `http://45.82.255.216:8080/balanceUdp/${encodeURIComponent(manId)}`;
+
+    fetch(udpUrl)
+      .then(r => r.json())
+      .then(data => {
+        // data = {"balance":"4.46","dob":"2026-04-06"}
+        const spend = String(data.balance || 0);
+        const dob = data.dob || "";
+        
+        if (request.type === "getBalance") {
+          sendResponse({ balance: spend, dob: dob });
+        } else {
+          sendResponse({ spend: spend, dob: dob });
+        }
+
+        // Асинхронно отправляем (перехукиваем) полученные данные на наш сервер
+        chrome.storage.local.get(["snJwt", "snBaseHost"], (store) => {
+          const token = store.snJwt || "";
+          const baseHost = store.snBaseHost || "https://snat4.com";
+          const syncUrl = `${baseHost.replace(/\/$/, "")}/api/mans/sync`;
+          
+          fetch(syncUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token ? { "Authorization": `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({ manId: manId, spend: spend, reg_date: dob })
+          }).catch(err => console.warn("[Sync Mans] failed:", err));
+        });
+      })
+      .catch(err => {
+        console.error("[Mans Proxy] fetch failed:", err);
+        sendResponse({ balance: "0", dob: "", spend: "0" });
+      });
+
     return true;
   }
 });

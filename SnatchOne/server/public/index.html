@@ -1,395 +1,1305 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Snatch Admin Panel</title>
-    <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96" />
-<link rel="icon" type="image/svg+xml" href="favicon.svg" />
-<link rel="shortcut icon" href="favicon.ico" />
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-<link rel="manifest" href="site.webmanifest" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snatch — Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="icon" type="image/png" href="favicon-96x96.png" sizes="96x96"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
+  <link rel="shortcut icon" href="favicon.ico"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
+  <link rel="manifest" href="site.webmanifest"/>
+  <style>
+/* ═══════════════════════════════════════════════
+   TOKENS
+══════════════════════════════════════════════ */
+:root {
+  --bg:           #070b11;
+  --bg2:          #0c1219;
+  --surface:      #0f1724;
+  --surface2:     #141e2e;
+  --surface3:     #1a2540;
+  --border:       rgba(255,255,255,0.06);
+  --border2:      rgba(255,255,255,0.11);
+  --text:         #dde6f5;
+  --text-2:       #7a95b8;
+  --text-3:       #3d5272;
+  --primary:      #4f8ef7;
+  --primary-dim:  rgba(79,142,247,0.10);
+  --primary-glow: rgba(79,142,247,0.22);
+  --cyan:         #22d3ee;
+  --cyan-dim:     rgba(34,211,238,0.09);
+  --green:        #22c55e;
+  --green-dim:    rgba(34,197,94,0.09);
+  --amber:        #f59e0b;
+  --amber-dim:    rgba(245,158,11,0.09);
+  --red:          #f43f5e;
+  --red-dim:      rgba(244,63,94,0.09);
+  --purple:       #c084fc;
+  --purple-dim:   rgba(192,132,252,0.09);
+  --gold:         #fbbf24;
+  --gold-dim:     rgba(251,191,36,0.09);
+  --r:            10px;
+  --r2:           16px;
+  --r3:           24px;
+  --font:         'Outfit', sans-serif;
+  --mono:         'JetBrains Mono', monospace;
+  --sw:           224px;   /* sidebar width */
+  --hh:           62px;    /* header height */
+}
+[data-theme="light"] {
+  --bg:       #f4f6fb;
+  --bg2:      #ffffff;
+  --surface:  #ffffff;
+  --surface2: #f0f4fa;
+  --surface3: #e4eaf6;
+  --border:   rgba(0,0,0,0.07);
+  --border2:  rgba(0,0,0,0.13);
+  --text:     #101828;
+  --text-2:   #475569;
+  --text-3:   #94a3b8;
+}
+
+/* ═══════════════════ RESET ═══════════════════ */
+*,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--primary-dim); color: var(--primary); }
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface3); border-radius:4px; }
+
+/* Ambient bg glow */
+body::before {
+  content:'';
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 0%, rgba(79,142,247,.05) 0%, transparent 65%),
+    radial-gradient(ellipse 50% 40% at 85% 100%, rgba(34,211,238,.03) 0%, transparent 65%);
+}
+
+/* ═══════════════════ LOGIN ═══════════════════ */
+#login-screen {
+  display:flex; align-items:center; justify-content:center;
+  min-height:100vh; position:relative; z-index:1;
+}
+.login-wrap { width:100%; max-width:400px; padding:24px; }
+
+.login-eyebrow {
+  display:inline-flex; align-items:center; gap:8px;
+  background: var(--primary-dim);
+  border: 1px solid rgba(79,142,247,.3);
+  border-radius:100px;
+  padding:5px 14px 5px 10px;
+  font-size:11px; font-weight:700; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--primary);
+  margin-bottom:24px;
+}
+.live-dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 8px var(--green);
+  animation:livePulse 2s infinite;
+}
+@keyframes livePulse {
+  0%,100%{opacity:1;transform:scale(1)}
+  50%{opacity:.5;transform:scale(.8)}
+}
+
+.login-head { margin-bottom:28px; }
+.login-title {
+  font-size:40px; font-weight:900;
+  letter-spacing:-.04em; line-height:1;
+  margin-bottom:6px;
+}
+.login-title-accent {
+  background: linear-gradient(120deg, var(--primary) 0%, var(--cyan) 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.login-sub { font-size:14px; color:var(--text-3); font-weight:400; }
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: var(--r3);
+  padding: 28px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
+}
+
+.field-row { margin-bottom:16px; }
+.field-label {
+  display:block;
+  font-size:11px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+  color:var(--text-3); margin-bottom:7px;
+}
+.field-input {
+  width:100%; padding:12px 16px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:var(--r); color:var(--text);
+  font-family:var(--mono); font-size:14px;
+  outline:none; transition:border-color .2s, box-shadow .2s;
+}
+.field-input:focus {
+  border-color:var(--primary);
+  box-shadow:0 0 0 3px var(--primary-dim);
+}
+
+.btn-login-submit {
+  width:100%; margin-top:6px; padding:13px;
+  background:var(--primary); border:none; border-radius:var(--r);
+  color:#fff; font-family:var(--font); font-size:15px; font-weight:700;
+  cursor:pointer; letter-spacing:.01em;
+  transition:all .2s;
+}
+.btn-login-submit:hover { background:#3070e0; transform:translateY(-1px); box-shadow:0 8px 24px var(--primary-glow); }
+.btn-login-submit:active { transform:translateY(0); }
+.btn-login-submit:disabled { opacity:.55; cursor:not-allowed; transform:none; box-shadow:none; }
+
+#login-error {
+  margin-top:12px; padding:10px 14px;
+  background:var(--red-dim); border:1px solid var(--red);
+  border-radius:var(--r); color:var(--red);
+  font-size:13px; display:none; text-align:center; font-weight:600;
+}
+
+/* ═══════════════════ DASHBOARD ═══════════════════ */
+#dashboard-screen { display:none; position:relative; z-index:1; }
+
+/* ─── SIDEBAR ─── */
+.sidebar {
+  position:fixed; left:0; top:0; bottom:0;
+  width:var(--sw);
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex; flex-direction:column;
+  z-index:200; transition:transform .28s cubic-bezier(.4,0,.2,1);
+  will-change:transform;
+}
+.sidebar.collapsed { transform:translateX(-100%); }
+
+.sidebar-logo {
+  height:var(--hh);
+  display:flex; align-items:center; gap:12px;
+  padding:0 20px; border-bottom:1px solid var(--border);
+  flex-shrink:0; cursor:default;
+}
+.logo-mark {
+  width:34px; height:34px; border-radius:9px; flex-shrink:0;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%);
+  display:flex; align-items:center; justify-content:center;
+  font-size:17px; box-shadow:0 4px 12px var(--primary-glow);
+}
+.logo-text { font-size:19px; font-weight:800; letter-spacing:-.03em; }
+
+.sidebar-nav { flex:1; padding:10px 8px; overflow-y:auto; }
+
+.nav-group-label {
+  font-size:10px; font-weight:700; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--text-3);
+  padding:10px 12px 4px;
+}
+
+/* APP.JS uses .sidebar-item for active state */
+.sidebar-item {
+  display:flex; align-items:center; gap:11px;
+  padding:9px 12px; border-radius:var(--r);
+  cursor:pointer; font-size:14px; font-weight:600;
+  color:var(--text-2); transition:all .15s;
+  margin-bottom:2px; border:1px solid transparent;
+  user-select:none;
+}
+.sidebar-item:hover { background:var(--surface2); color:var(--text); }
+.sidebar-item.active {
+  background:var(--primary-dim);
+  color:var(--primary);
+  border-color:rgba(79,142,247,.18);
+}
+.sidebar-item-icon { font-size:16px; width:20px; text-align:center; flex-shrink:0; }
+.sidebar-item-label { flex:1; }
+.sidebar-badge {
+  background:var(--primary); color:#fff;
+  font-size:10px; font-weight:700;
+  padding:2px 7px; border-radius:100px;
+  font-family:var(--mono); min-width:22px; text-align:center;
+}
+
+.sidebar-footer {
+  padding:10px 8px;
+  border-top:1px solid var(--border);
+}
+
+/* user pill — app.js binds "user-pill-btn" id */
+#user-pill-btn {
+  display:flex; align-items:center; gap:10px;
+  padding:10px 12px; border-radius:var(--r);
+  cursor:pointer; transition:background .15s;
+}
+#user-pill-btn:hover { background:var(--surface2); }
+
+.pill-avatar {
+  width:34px; height:34px; border-radius:50%;
+  object-fit:cover; border:2px solid var(--border2); flex-shrink:0;
+}
+.pill-info { flex:1; min-width:0; }
+.pill-name {
+  font-size:13px; font-weight:700;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.pill-role { font-size:11px; color:var(--gold); font-weight:600; margin-top:1px; }
+
+/* ─── HEADER ─── */
+.header {
+  position:fixed; top:0; right:0; left:var(--sw);
+  height:var(--hh);
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex; align-items:center; gap:10px;
+  padding:0 20px; z-index:199;
+  transition:left .28s cubic-bezier(.4,0,.2,1);
+}
+.header.sidebar-open { left:var(--sw); }
+/* when sidebar collapses, app.js removes sidebar-open from header */
+.header:not(.sidebar-open) { left:0; }
+
+#sidebar-toggle {
+  width:36px; height:36px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:var(--r); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-size:16px; color:var(--text-2);
+  transition:all .15s; flex-shrink:0;
+}
+#sidebar-toggle:hover { background:var(--surface3); color:var(--text); }
+
+.h-spacer { flex:1; }
+
+.h-time {
+  font-family:var(--mono); font-size:12px;
+  color:var(--text-2);
+  background:var(--surface2); border:1px solid var(--border);
+  padding:5px 12px; border-radius:var(--r);
+  letter-spacing:.03em;
+}
+
+.h-btn {
+  height:36px; padding:0 14px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:var(--r); color:var(--text-2);
+  font-family:var(--font); font-size:13px; font-weight:600;
+  cursor:pointer; transition:all .15s;
+  display:flex; align-items:center; gap:7px; white-space:nowrap;
+}
+.h-btn:hover { background:var(--surface3); color:var(--text); border-color:var(--border2); }
+.h-btn.h-btn-danger:hover { background:var(--red-dim); color:var(--red); border-color:var(--red); }
+
+#hdr-avatar { width:22px; height:22px; border-radius:50%; object-fit:cover; }
+#user-role-badge { display:none; }
+
+/* ─── MAIN ─── */
+#main-content {
+  margin-left:var(--sw); margin-top:var(--hh);
+  padding:24px; min-height:calc(100vh - var(--hh));
+  transition:margin-left .28s cubic-bezier(.4,0,.2,1);
+}
+#main-content.sidebar-collapsed { margin-left:0; }
+
+/* ─── PAGE HEADER ─── */
+.pg-title {
+  font-size:22px; font-weight:800; letter-spacing:-.03em;
+  display:flex; align-items:center; gap:10px; margin-bottom:22px;
+}
+.pg-icon {
+  width:38px; height:38px; border-radius:var(--r);
+  display:flex; align-items:center; justify-content:center; font-size:18px;
+}
+
+/* ─── STAT CARDS ─── */
+.stats-row {
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(190px, 1fr));
+  gap:14px; margin-bottom:20px;
+}
+.stat-card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r2); padding:18px 20px;
+  position:relative; overflow:hidden;
+  transition:border-color .2s, transform .2s; cursor:default;
+}
+.stat-card:hover { border-color:var(--border2); transform:translateY(-2px); }
+.stat-card::after {
+  content:''; position:absolute;
+  top:-20px; right:-20px;
+  width:80px; height:80px; border-radius:50%; opacity:.07;
+}
+.sc-blue::after   { background:var(--primary); }
+.sc-green::after  { background:var(--green); }
+.sc-purple::after { background:var(--purple); }
+.sc-gold::after   { background:var(--gold); }
+
+.sc-label {
+  font-size:11px; font-weight:700; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--text-3); margin-bottom:10px;
+}
+.sc-val {
+  font-size:34px; font-weight:800;
+  font-family:var(--mono); letter-spacing:-.04em;
+  line-height:1; margin-bottom:4px;
+}
+.sc-val.c-blue   { color:var(--primary); }
+.sc-val.c-green  { color:var(--green); }
+.sc-val.c-purple { color:var(--purple); }
+.sc-val.c-gold   { color:var(--gold); }
+.sc-sub { font-size:12px; color:var(--text-3); }
+
+/* ─── CARD / PANEL ─── */
+.card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r2); overflow:hidden;
+  margin-bottom:16px;
+}
+.card-head {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px; border-bottom:1px solid var(--border);
+  gap:12px; flex-wrap:wrap;
+}
+.card-head-title {
+  font-size:14px; font-weight:700;
+  display:flex; align-items:center; gap:8px;
+}
+.card-head-icon {
+  width:26px; height:26px; border-radius:7px;
+  display:flex; align-items:center; justify-content:center; font-size:13px;
+}
+.card-head-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+
+/* ─── CHART ─── */
+.chart-card {
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r2); padding:20px;
+  margin-bottom:16px;
+}
+.chart-top {
+  display:flex; justify-content:space-between;
+  align-items:flex-start; margin-bottom:16px;
+}
+.chart-title { font-size:15px; font-weight:700; margin-bottom:2px; }
+.chart-subtitle { font-size:12px; color:var(--text-3); }
+.chart-live-val {
+  font-size:30px; font-weight:800;
+  font-family:var(--mono); color:var(--primary); line-height:1;
+}
+.chart-live-lbl { font-size:12px; color:var(--text-3); }
+
+/* ─── TABLE ─── */
+.tbl-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; }
+thead th {
+  background:var(--surface2);
+  padding:10px 16px; text-align:left;
+  font-size:11px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--text-3);
+  border-bottom:1px solid var(--border); white-space:nowrap;
+}
+tbody tr { border-bottom:1px solid var(--border); transition:background .1s; }
+tbody tr:last-child { border-bottom:none; }
+tbody tr:hover { background:var(--surface2); }
+tbody td { padding:12px 16px; font-size:13px; vertical-align:middle; }
+.empty-cell { text-align:center; padding:40px 20px; color:var(--text-3); font-size:14px; }
+
+/* ─── STATUS DOTS ─── */
+.dot {
+  display:inline-block; width:8px; height:8px;
+  border-radius:50%; flex-shrink:0;
+}
+.dot.online { background:var(--green); box-shadow:0 0 8px var(--green); }
+.dot.offline { background:var(--text-3); }
+
+/* ─── TIME CLASSES (used by app.js) ─── */
+.time-ok   { color:var(--green); font-family:var(--mono); font-size:12px; font-weight:600; }
+.time-warn { color:var(--amber); font-family:var(--mono); font-size:12px; font-weight:600; }
+.time-crit {
+  color:var(--red); font-family:var(--mono); font-size:12px; font-weight:600;
+  animation:timeBlink 1.4s infinite;
+}
+@keyframes timeBlink { 0%,100%{opacity:1}50%{opacity:.4} }
+
+/* ─── ROLE BADGES (rb classes used by app.js) ─── */
+.rb {
+  display:inline-flex; align-items:center; gap:4px;
+  padding:3px 10px; border-radius:100px;
+  font-size:11px; font-weight:700; letter-spacing:.02em;
+}
+.rb-boss   { background:var(--gold-dim);   color:var(--gold);   border:1px solid rgba(251,191,36,.22); }
+.rb-top    { background:var(--purple-dim); color:var(--purple); border:1px solid rgba(192,132,252,.22); }
+.rb-admin  { background:var(--primary-dim); color:var(--primary); border:1px solid rgba(79,142,247,.22); }
+.rb-team   { background:var(--cyan-dim);   color:var(--cyan);   border:1px solid rgba(34,211,238,.22); }
+.rb-transl { background:var(--surface2);   color:var(--text-2); border:1px solid var(--border2); }
+
+/* ─── USER CELL (uc-name, uc-login, user-cell used by app.js) ─── */
+.user-cell { display:flex; align-items:center; gap:10px; }
+.user-cell img {
+  width:36px; height:36px; border-radius:50%;
+  object-fit:cover; border:2px solid var(--border2); flex-shrink:0;
+}
+.uc-name { font-size:13px; font-weight:700; }
+.uc-login { font-size:11px; color:var(--text-3); font-family:var(--mono); margin-top:1px; }
+
+/* ─── TG LINK (used by app.js) ─── */
+.tg-link {
+  color:var(--cyan); text-decoration:none;
+  font-size:12px; font-weight:600; transition:opacity .15s;
+}
+.tg-link:hover { opacity:.75; }
+
+/* ─── BUTTONS ─── */
+.btn {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:6px 13px; border-radius:var(--r);
+  font-family:var(--font); font-size:12px; font-weight:700;
+  cursor:pointer; border:1px solid transparent;
+  transition:all .15s; white-space:nowrap;
+}
+.btn:hover { transform:translateY(-1px); }
+.btn:active { transform:translateY(0); }
+.btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+
+.btn-primary  { background:var(--primary); color:#fff; border-color:var(--primary); }
+.btn-primary:hover  { background:#3870e0; box-shadow:0 4px 14px var(--primary-glow); }
+.btn-success  { background:var(--green-dim); color:var(--green); border-color:rgba(34,197,94,.22); }
+.btn-success:hover  { background:var(--green); color:#fff; }
+.btn-danger   { background:var(--red-dim); color:var(--red); border-color:rgba(244,63,94,.22); }
+.btn-danger:hover   { background:var(--red); color:#fff; }
+.btn-secondary{ background:var(--surface2); color:var(--text-2); border-color:var(--border2); }
+.btn-secondary:hover{ background:var(--surface3); color:var(--text); }
+.btn-icon     { background:var(--surface2); color:var(--text-2); border-color:var(--border2); padding:4px 10px; font-size:11px; }
+.btn-icon:hover     { background:var(--surface3); color:var(--text); }
+.btn-full { width:100%; justify-content:center; }
+.btn-lg   { padding:11px 20px; font-size:14px; }
+
+/* ─── FILTER BUTTONS (filter-btn class used by app.js) ─── */
+.filter-buttons {
+  display:flex; gap:3px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:var(--r); padding:3px;
+}
+.filter-btn {
+  padding:5px 12px; border-radius:7px;
+  font-size:12px; font-weight:600;
+  cursor:pointer; color:var(--text-3);
+  transition:all .15s; border:none;
+  background:none; font-family:var(--font);
+}
+.filter-btn.active { background:var(--surface); color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,.2); }
+.filter-btn:hover:not(.active) { color:var(--text-2); }
+
+/* ─── SEARCH ─── */
+.search-inp {
+  padding:7px 14px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:var(--r); color:var(--text);
+  font-family:var(--font); font-size:13px;
+  outline:none; width:195px; transition:border-color .2s;
+}
+.search-inp:focus { border-color:var(--primary); }
+
+/* ─── FORM ─── */
+.form-group { margin-bottom:14px; }
+.form-label {
+  display:block; font-size:11px; font-weight:700;
+  letter-spacing:.07em; text-transform:uppercase;
+  color:var(--text-3); margin-bottom:6px;
+}
+.form-input, .form-select {
+  width:100%; padding:10px 14px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:var(--r); color:var(--text);
+  font-family:var(--font); font-size:13px;
+  outline:none; transition:border-color .2s; appearance:none;
+}
+.form-select {
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%233d5272' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 12px center; padding-right:32px;
+}
+.form-input:focus, .form-select:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-dim); }
+
+/* ─── MODALS ─── */
+/* profile-modal-overlay — app.js sets style.display = 'flex' */
+#profile-modal-overlay,
+#create-keys-modal,
+#op-modal-overlay {
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.70);
+  z-index:1000; display:none;
+  align-items:center; justify-content:center;
+  backdrop-filter:blur(8px); padding:20px;
+}
+/* app.js sets display='flex' to open; we preserve that */
+
+.modal-panel {
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:var(--r3);
+  width:100%; max-width:500px;
+  max-height:90vh; overflow-y:auto;
+  box-shadow:0 32px 80px rgba(0,0,0,.6);
+  animation:popIn .22s cubic-bezier(.34,1.56,.64,1);
+}
+.modal-panel.wide { max-width:860px; }
+
+@keyframes popIn {
+  from { opacity:0; transform:scale(.94) translateY(12px); }
+  to   { opacity:1; transform:scale(1)  translateY(0);    }
+}
+
+.modal-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-bottom:1px solid var(--border);
+}
+.modal-title { font-size:15px; font-weight:700; }
+
+/* .modal-close used by app.js for show/hide */
+.modal-close {
+  width:28px; height:28px;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:7px; cursor:pointer; color:var(--text-2);
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; line-height:1; transition:all .15s;
+}
+.modal-close:hover { background:var(--red-dim); color:var(--red); border-color:var(--red); }
+
+/* Modal tabs — app.js uses .tab-content class */
+.modal-tabs {
+  display:flex; gap:3px; padding:10px 20px;
+  border-bottom:1px solid var(--border);
+}
+.modal-tab {
+  padding:6px 14px; border-radius:var(--r);
+  font-size:13px; font-weight:600;
+  cursor:pointer; color:var(--text-2);
+  transition:all .15s; border:none;
+  background:none; font-family:var(--font);
+}
+.modal-tab.active { background:var(--primary-dim); color:var(--primary); }
+
+/* app.js toggles active on .tab-content */
+.tab-content { display:none; }
+.tab-content.active { display:block; }
+
+.modal-body { padding:20px; }
+
+/* ─── PROFILE MODAL LAYOUT ─── */
+.profile-layout {
+  display:flex; flex-direction:column; align-items:center;
+  gap:12px; margin-bottom:20px;
+}
+#prof-avatar-preview {
+  width:84px; height:84px; border-radius:50%;
+  object-fit:cover; border:3px solid var(--primary);
+  box-shadow:0 0 0 6px var(--primary-dim);
+}
+#btn-upload-avatar {
+  padding:6px 16px; border-radius:var(--r);
+  background:var(--surface2); border:1px solid var(--border2);
+  color:var(--text-2); font-family:var(--font); font-size:12px; font-weight:600;
+  cursor:pointer; transition:all .15s;
+}
+#btn-upload-avatar:hover { background:var(--surface3); color:var(--text); }
+
+/* ─── KEY DOWNLOAD BOX ─── */
+#new-key-result {
+  display:none; margin-top:18px; padding:16px;
+  background:var(--green-dim); border:1px solid rgba(34,197,94,.25);
+  border-radius:var(--r2);
+}
+.kd-title { font-size:13px; font-weight:700; color:var(--green); margin-bottom:10px; }
+.kd-warn  { font-size:12px; color:var(--amber); font-weight:600; margin:8px 0; }
+.kd-note  { font-size:11px; color:var(--text-3); margin-bottom:14px; line-height:1.55; }
+.btn-download {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  width:100%; padding:11px;
+  background:var(--green); border:none; border-radius:var(--r);
+  color:#fff; font-family:var(--font); font-size:13px; font-weight:700;
+  cursor:pointer; transition:all .15s;
+}
+.btn-download:hover { background:#16a34a; transform:translateY(-1px); }
+
+/* ─── CONFIRM TOAST (app.js uses id=confirmToast) ─── */
+#confirmToast {
+  position:fixed; inset:0;
+  background:rgba(0,0,0,.65); backdrop-filter:blur(6px);
+  z-index:9000; display:none;
+  align-items:center; justify-content:center;
+}
+.confirm-box {
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:var(--r2); padding:28px;
+  max-width:380px; width:90%; text-align:center;
+  box-shadow:0 24px 60px rgba(0,0,0,.6);
+  animation:popIn .22s cubic-bezier(.34,1.56,.64,1);
+}
+.confirm-icon { font-size:34px; margin-bottom:12px; }
+.confirm-title { font-size:18px; font-weight:700; margin-bottom:8px; }
+.confirm-text  { font-size:13px; color:var(--text-2); margin-bottom:22px; line-height:1.55; }
+.confirm-row   { display:flex; gap:10px; }
+.confirm-row .btn { flex:1; justify-content:center; padding:10px; font-size:13px; }
+
+/* ─── TOP TEAM FILTER (top-role.js) ─── */
+#top-team-filter { display:none; margin-bottom:16px; }
+.team-filter-btn {
+  padding:7px 16px; border-radius:100px;
+  font-size:12px; font-weight:600; cursor:pointer;
+  border:1px solid var(--border2); background:var(--surface2);
+  color:var(--text-2); font-family:var(--font); transition:all .15s;
+}
+#team-filter-all,
+.team-filter-btn { }
+.team-filter-btn.active,
+#team-filter-all.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+/* ─── SUPERADMIN TEAM FILTER BADGE ─── */
+#superadmin-team-filter-badge {
+  display:none; align-items:center; gap:8px;
+  background:var(--primary-dim);
+  border:1px solid rgba(79,142,247,.28);
+  border-radius:var(--r); padding:5px 12px;
+  font-size:12px; font-weight:600; color:var(--primary);
+}
+
+/* ─── USERS LAYOUT ─── */
+.users-grid {
+  display:grid; grid-template-columns:290px 1fr;
+  gap:16px; align-items:start;
+}
+@media(max-width:900px) { .users-grid { grid-template-columns:1fr; } }
+
+.create-user-panel {
+  background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--r2); overflow:hidden;
+}
+.cup-head {
+  background:linear-gradient(90deg, rgba(251,191,36,.08) 0%, transparent 100%);
+  border-bottom:1px solid rgba(251,191,36,.12);
+  padding:13px 16px; display:flex; align-items:center; gap:8px;
+}
+.cup-title { font-size:14px; font-weight:700; color:var(--gold); }
+.cup-body  { padding:16px; }
+
+/* ─── TOAST (app.js creates .snatch-toast dynamically) ─── */
+/* defined in app.js via inline styles — no overrides needed */
+
+/* ─── STAT BADGES in table rows ─── */
+.stat-badge {
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:38px; padding:3px 9px; border-radius:100px;
+  font-size:12px; font-weight:700; font-family:var(--mono);
+  letter-spacing:-.02em; line-height:1;
+}
+.stat-badge-chat   { background:rgba(34,211,238,.12); color:var(--cyan);   border:1px solid rgba(34,211,238,.2); }
+.stat-badge-letter { background:rgba(192,132,252,.12); color:var(--purple); border:1px solid rgba(192,132,252,.2); }
+.stat-badge-off    { background:var(--surface2); color:var(--text-3); border:1px solid var(--border); font-weight:500; }
+
+/* ─── TABLE ROW left accent ─── */
+.key-row.status-online  td:first-child { border-left:3px solid var(--green); padding-left:13px; }
+.key-row.status-offline td:first-child { border-left:3px solid var(--surface3); padding-left:13px; }
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes slideDown {
+  from { transform:translateY(-100%); opacity:0; }
+  to   { transform:translateY(0); opacity:1; }
+}
+#view-dashboard, #view-licenses, #view-users, #view-mans {
+  animation:fadeUp .25s ease;
+}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:768px) {
+  :root { --sw:0px; }
+  .sidebar { transform:translateX(-224px); width:224px; }
+  .header { left:0 !important; }
+  #main-content { margin-left:0 !important; padding:16px; }
+  .stats-row { grid-template-columns:1fr 1fr; }
+}
+  </style>
 </head>
 <body>
 
-<!-- ══════════════════ LOGIN ══════════════════ -->
+<!-- ══════════════════════════════════════════
+     LOGIN
+══════════════════════════════════════════ -->
 <div id="login-screen">
+  <div class="login-wrap">
+    <div class="login-eyebrow">
+      <div class="live-dot"></div>
+      SYSTEM ONLINE
+    </div>
+    <div class="login-head">
+      <h1 class="login-title">
+        Snatch<br>
+        <span class="login-title-accent">Control Center</span>
+      </h1>
+      <p class="login-sub">Система управления лицензиями и операторами</p>
+    </div>
     <div class="login-card">
-        <div class="login-logo">
-            <div class="logo-icon">💸</div>
-            <h2>Snatch Admin</h2>
-            <p>Система управления</p>
+      <div class="field-row">
+        <label class="field-label" for="login-user">Логин</label>
+        <input type="text" id="login-user" class="field-input" placeholder="username" autocomplete="username">
+      </div>
+      <div class="field-row">
+        <label class="field-label" for="login-pass">Пароль</label>
+        <input type="password" id="login-pass" class="field-input" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button id="btn-login" class="btn-login-submit">Войти в систему</button>
+      <div id="login-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     DASHBOARD
+══════════════════════════════════════════ -->
+<div id="dashboard-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar sidebar-open" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">💸</div>
+      <div class="logo-text">Snatch</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Обзор</div>
+      <!-- app.js sets .sidebar-item.active; also uses id="menu-dashboard" -->
+      <div class="sidebar-item active" id="menu-dashboard">
+        <span class="sidebar-item-icon">📊</span>
+        <span class="sidebar-item-label">Дашборд</span>
+      </div>
+
+      <div class="nav-group-label">Управление</div>
+      <div class="sidebar-item" id="menu-licenses">
+        <span class="sidebar-item-icon">🔑</span>
+        <span class="sidebar-item-label">Лицензии</span>
+        <span class="sidebar-badge" id="nav-badge-licenses" style="display:none;">0</span>
+      </div>
+      <div class="sidebar-item" id="menu-users" style="display:none;">
+        <span class="sidebar-item-icon">👥</span>
+        <span class="sidebar-item-label">Пользователи</span>
+      </div>
+      <div class="sidebar-item" id="menu-mans" style="display:none;">
+        <span class="sidebar-item-icon">🧑‍💼</span>
+        <span class="sidebar-item-label">Мужчины</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <!-- app.js binds click on user-pill-btn -->
+      <div id="user-pill-btn">
+        <img id="sb-avatar" class="pill-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect fill='%231a2540' width='36' height='36' rx='18'/%3E%3C/svg%3E" alt="">
+        <div class="pill-info">
+          <div class="pill-name" id="sb-nickname">—</div>
+          <div class="pill-role" id="sb-role">CEO</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- HEADER -->
+  <!-- app.js adds/removes class "sidebar-open" to control left offset -->
+  <header class="header sidebar-open" id="main-header">
+    <button id="sidebar-toggle" title="Меню">☰</button>
+
+    <div class="h-spacer"></div>
+
+    <div class="h-time" id="time">--:--:--</div>
+
+    <button class="h-btn" id="theme-toggle">
+      <span id="theme-icon">☀️</span>
+    </button>
+
+    <button class="h-btn" id="btn-profile-open">
+      <img id="hdr-avatar" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Crect fill='%231a2540' width='22' height='22' rx='11'/%3E%3C/svg%3E" alt="">
+      <span id="hdr-nickname">—</span>
+      <span id="user-role-badge"></span>
+    </button>
+
+    <button class="h-btn h-btn-danger" id="btn-logout">⏻ Выход</button>
+  </header>
+
+  <!-- MAIN -->
+  <main id="main-content">
+
+    <!-- ── DASHBOARD VIEW ── -->
+    <div id="view-dashboard">
+      <div class="pg-title">
+        <div class="pg-icon" style="background:var(--primary-dim);">📊</div>
+        Дашборд CEO
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card sc-blue">
+          <div class="sc-label">🟢 Активных сессий</div>
+          <div class="sc-val c-blue" id="stat-online">0</div>
+          <div class="sc-sub">операторов онлайн</div>
+        </div>
+        <div class="stat-card sc-green">
+          <div class="sc-label">💬 Чатов всего</div>
+          <div class="sc-val c-green" id="stat-chats">0</div>
+          <div class="sc-sub">за всё время</div>
+        </div>
+        <div class="stat-card sc-purple">
+          <div class="sc-label">✉️ Писем всего</div>
+          <div class="sc-val c-purple" id="stat-letters">0</div>
+          <div class="sc-sub">за всё время</div>
+        </div>
+        <div class="stat-card sc-gold">
+          <div class="sc-label">🔑 Лицензий</div>
+          <div class="sc-val c-gold" id="stat-total-keys">0</div>
+          <div class="sc-sub">активных ключей</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-top">
+          <div>
+            <div class="chart-title">📈 График активности</div>
+            <div class="chart-subtitle">Онлайн сессий за последние 20 минут</div>
+          </div>
+          <div>
+            <div class="chart-live-val" id="chart-current-value">0</div>
+            <div class="chart-live-lbl">сейчас онлайн</div>
+          </div>
+        </div>
+        <div style="position:relative;height:200px;width:100%;">
+          <canvas id="activityChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-head-title">
+            <div class="card-head-icon" style="background:var(--green-dim);">🟢</div>
+            Активные операторы
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th></th><th>Оператор</th><th>Остаток</th><th style="text-align:center">💬 Чатов</th><th style="text-align:center">✉️ Писем</th><th>Действия</th>
+            </tr></thead>
+            <tbody id="dashboard-active-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /view-dashboard -->
+
+    <!-- ── LICENSES VIEW ── -->
+    <div id="view-licenses" style="display:none;">
+      <div class="pg-title">
+        <div class="pg-icon" style="background:var(--primary-dim);">🔑</div>
+        Лицензии
+      </div>
+
+      <!-- top-role.js toggles this panel -->
+      <div id="top-team-filter">
+        <div class="card">
+          <div class="card-head">
+            <div class="card-head-title">
+              <div class="card-head-icon" style="background:var(--purple-dim);">👥</div>
+              Фильтр по команде
+            </div>
+          </div>
+          <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <!-- top-role.js adds class "active" to team-filter-all -->
+            <button class="team-filter-btn" id="team-filter-all" onclick="filterByTeam(null)">
+              Все команды
+            </button>
+            <!-- top-role.js populates this -->
+            <div id="team-filter-buttons" style="display:contents;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-head-title">
+            <div class="card-head-icon" style="background:var(--primary-dim);">🗂</div>
+            Все лицензии
+          </div>
+          <div class="card-head-actions">
+            <!-- app.js toggles display on this badge -->
+            <div id="superadmin-team-filter-badge">
+              <span id="superadmin-team-filter-name"></span>
+              <button onclick="window.clearTeamKeysFilter()" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:14px;padding:0;line-height:1;">✕</button>
+            </div>
+            <!-- app.js queries .filter-btn -->
+            <div class="filter-buttons">
+              <button class="filter-btn active" data-filter="all">
+                Все <span id="filter-count-all">0</span>
+              </button>
+              <button class="filter-btn" data-filter="online">
+                Онлайн <span id="filter-count-online">0</span>
+              </button>
+              <button class="filter-btn" data-filter="offline">
+                Офлайн <span id="filter-count-offline">0</span>
+              </button>
+            </div>
+            <input type="text" id="searchKey" class="search-inp" placeholder="🔍 Поиск…" oninput="filterKeysTable()">
+            <!-- app.js shows/hides this by id -->
+            <button class="btn btn-primary" id="btn-create-keys-modal" style="display:none;">＋ Создать</button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th></th><th>Оператор</th><th>Истекает</th><th style="text-align:center">💬 Чатов</th><th style="text-align:center">✉️ Писем</th><th>Действия</th>
+            </tr></thead>
+            <tbody id="licenses-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /view-licenses -->
+
+    <!-- ── USERS VIEW ── -->
+    <div id="view-users" style="display:none;">
+      <div class="pg-title">
+        <div class="pg-icon" style="background:var(--cyan-dim);">👥</div>
+        Пользователи
+      </div>
+
+      <div class="users-grid">
+        <!-- app.js shows/hides by id="superadmin-panel" -->
+        <div id="superadmin-panel" style="display:none;">
+          <!-- FIX 7: Announcement manager (CEO only) -->
+          <div id="announcement-manager"></div>
+          <div class="create-user-panel">
+            <div class="cup-head">
+              <span>👑</span>
+              <span class="cup-title">Создать пользователя</span>
+            </div>
+            <div class="cup-body">
+              <div class="form-group">
+                <label class="form-label">Логин</label>
+                <input type="text" id="new-user-name" class="form-input" placeholder="login">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Пароль</label>
+                <input type="text" id="new-user-pass" class="form-input" placeholder="password">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Роль</label>
+                <select id="new-user-role" class="form-select">
+                  <option value="team">🏢 Команда (Владелец ключей)</option>
+                  <option value="admin">🛡 Админ Snatch (прямой)</option>
+                  <option value="top">⭐ Топ (Управляющий партнёр)</option>
+                  <option value="superadmin">👑 Супер-Админ (CEO)</option>
+                </select>
+              </div>
+              <button id="btn-create-user" class="btn btn-primary btn-full btn-lg">＋ Добавить</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-head-title">
+                <div class="card-head-icon" style="background:var(--cyan-dim);">👤</div>
+                Все пользователи системы
+              </div>
+              <div class="card-head-actions" style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-secondary" onclick="expandAllUsers()">Развернуть всех</button>
+                <button class="btn btn-secondary" onclick="collapseAllUsers()">Свернуть всех</button>
+                <input type="text" id="searchUsers" class="search-inp" placeholder="🔍 Поиск…" oninput="filterUsersTable()">
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead><tr>
+                  <th>Профиль</th><th>Telegram</th><th>Роль</th><th>Ключи / Связи</th><th>Действия</th>
+                </tr></thead>
+                <tbody id="all-users-table"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /view-users -->
+
+    <!-- ── MANS VIEW ── -->
+    <div id="view-mans" style="display:none;">
+      <div class="pg-title">
+        <div class="pg-icon" style="background:var(--amber-dim);">🧑‍💼</div>
+        Мужчины — Read-Through Cache
+      </div>
+
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-head">
+          <div class="card-head-title">
+            <div class="card-head-icon" style="background:var(--amber-dim);">🔍</div>
+            Фильтры
+          </div>
+        </div>
+        <div style="padding:16px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+          <div class="form-group" style="flex:1;min-width:180px;">
+            <label class="form-label">Поиск по ID</label>
+            <input type="text" id="mans-search" class="form-input" placeholder="man_id…">
+          </div>
+          <div class="form-group" style="min-width:120px;">
+            <label class="form-label">Min Spend</label>
+            <input type="number" id="mans-min-spend" class="form-input" placeholder="0" step="0.01">
+          </div>
+          <div class="form-group" style="min-width:120px;">
+            <label class="form-label">Max Spend</label>
+            <input type="number" id="mans-max-spend" class="form-input" placeholder="∞" step="0.01">
+          </div>
+          <div class="form-group" style="min-width:140px;">
+            <label class="form-label">Дата от</label>
+            <input type="date" id="mans-from-date" class="form-input">
+          </div>
+          <div class="form-group" style="min-width:140px;">
+            <label class="form-label">Дата до</label>
+            <input type="date" id="mans-to-date" class="form-input">
+          </div>
+          <button class="btn btn-primary" id="btn-mans-search" style="height:40px;">🔍 Искать</button>
+          <button class="btn btn-secondary" id="btn-mans-reset" style="height:40px;">↺ Сброс</button>
+        </div>
+      </div>
+
+      <!-- Быстрый поиск одного мужчины -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="card-head">
+          <div class="card-head-title">
+            <div class="card-head-icon" style="background:var(--green-dim);">⚡</div>
+            Быстрый запрос баланса
+          </div>
+        </div>
+        <div style="padding:16px;display:flex;gap:12px;align-items:flex-end;">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Man ID</label>
+            <input type="text" id="mans-quick-id" class="form-input" placeholder="Введите ID мужчины…">
+          </div>
+          <button class="btn btn-primary" id="btn-mans-quick" style="height:40px;">⚡ Запросить</button>
+        </div>
+        <div id="mans-quick-result" style="padding:0 16px 16px;display:none;"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-head-title">
+            <div class="card-head-icon" style="background:var(--amber-dim);">📋</div>
+            Список мужчин
+            <span style="font-size:12px;color:var(--text-3);margin-left:8px;" id="mans-total-count"></span>
+          </div>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Man ID</th><th>Spend</th><th>Дата рег.</th><th>Обновлено</th><th>Действия</th>
+            </tr></thead>
+            <tbody id="mans-table"></tbody>
+          </table>
+        </div>
+        <div id="mans-pagination" style="padding:12px 16px;display:flex;gap:8px;justify-content:center;align-items:center;"></div>
+      </div>
+    </div><!-- /view-mans -->
+
+  </main>
+</div><!-- /dashboard-screen -->
+
+<!-- ══════════════════════════════════════════
+     OPERATOR DETAILS MODAL
+══════════════════════════════════════════ -->
+<!-- app.js sets style.display='flex' to open -->
+<div id="op-modal-overlay">
+  <div class="modal-panel wide">
+    <div class="modal-header">
+      <div class="modal-title" id="op-modal-title">Детали оператора</div>
+      <button class="modal-close" onclick="document.getElementById('op-modal-overlay').style.display='none'">×</button>
+    </div>
+    <!-- app.js uses .modal-tab and .tab-content -->
+    <div class="modal-tabs">
+      <button class="modal-tab active" data-tab="rotation">🔄 Текущая ротация</button>
+      <button class="modal-tab" data-tab="settings">⚙️ Настройки</button>
+      <button class="modal-tab" data-tab="logs">📋 Logs</button>
+    </div>
+    <!-- app.js injects HTML into tab-rotation / tab-settings -->
+    <div class="tab-content active" id="tab-rotation"></div>
+    <div class="tab-content" id="tab-settings"></div>
+    <div class="tab-content" id="tab-logs"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     PROFILE MODAL
+══════════════════════════════════════════ -->
+<!-- app.js sets style.display='flex' to open and uses class .modal-close / .modal-panel / .profile-layout -->
+<div id="profile-modal-overlay">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <div class="modal-title">Мой профиль</div>
+      <!-- app.js queries "#profile-modal-overlay .modal-close" -->
+      <button class="modal-close" id="profile-modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- app.js injects force-rename-warning before .profile-layout.parentNode -->
+      <div class="profile-layout">
+        <img id="prof-avatar-preview" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 84 84'%3E%3Crect fill='%231a2540' width='84' height='84' rx='42'/%3E%3C/svg%3E" alt="">
+        <button id="btn-upload-avatar">📷 Загрузить фото</button>
+      </div>
+      <input type="file" id="prof-avatar-file" accept="image/*" style="display:none;">
+      <input type="hidden" id="prof-avatar-base64">
+
+      <div class="form-group">
+        <label class="form-label">Никнейм / Имя</label>
+        <input type="text" id="prof-nickname" class="form-input" placeholder="Ваше имя">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telegram (без @)</label>
+        <input type="text" id="prof-telegram" class="form-input" placeholder="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Новый пароль</label>
+        <input type="password" id="prof-new-pass" class="form-input" placeholder="Оставьте пустым если не меняете">
+      </div>
+      <button id="btn-save-profile" class="btn btn-primary btn-full btn-lg">Сохранить профиль</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     CREATE KEYS MODAL
+══════════════════════════════════════════ -->
+<!-- app.js sets style.display='flex' to open; queries "#create-keys-modal .modal-close" -->
+<div id="create-keys-modal">
+  <div class="modal-panel">
+    <div class="modal-header">
+      <div class="modal-title">🔑 Создать лицензии</div>
+      <button class="modal-close" onclick="document.getElementById('create-keys-modal').style.display='none';resetCreateKeysModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- app.js shows/hides by id -->
+      <div class="form-group" id="team-select-group" style="display:none;">
+        <label class="form-label">Привязать к команде</label>
+        <select id="key-team-owner" class="form-select">
+          <option value="me">Оставить себе</option>
+        </select>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group">
+          <label class="form-label">Количество</label>
+          <input type="number" id="key-count" class="form-input" value="1" min="1" max="50">
         </div>
         <div class="form-group">
-            <label>Логин</label>
-            <input type="text" id="login-user" placeholder="Введите логин" autocomplete="username">
+          <label class="form-label">Срок действия</label>
+          <select id="key-duration" class="form-select">
+            <option value="3">3 дня (тест)</option>
+            <option value="7">7 дней</option>
+            <option value="14">14 дней</option>
+            <option value="30">30 дней</option>
+            <option value="60">60 дней</option>
+            <option value="90">90 дней</option>
+          </select>
         </div>
-        <div class="form-group">
-            <label>Пароль</label>
-            <input type="password" id="login-pass" placeholder="Введите пароль" autocomplete="current-password">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Примечание / Имя</label>
+        <input type="text" id="key-note" class="form-input" placeholder="Например: Иван">
+      </div>
+
+      <button id="btn-generate" class="btn btn-primary btn-full btn-lg">Сгенерировать ключи</button>
+
+      <!-- app.js sets display="block" on this -->
+      <div id="new-key-result">
+        <div class="kd-title">✅ Ключи успешно сгенерированы</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:12px;color:var(--text-2);">Готово к скачиванию</span>
+          <span style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);" id="key-result-count">0 шт.</span>
         </div>
-        <button id="btn-login" class="btn btn-primary btn-full" style="margin-top:12px; padding:12px;">
-            Войти в систему
-        </button>
-        <div id="login-error"></div>
+        <div class="kd-warn">⚠️ ВАЖНО: Скачайте файл прямо сейчас!</div>
+        <div class="kd-note">Оригинальные ключи доступны только при генерации и не хранятся в системе. После закрытия окна восстановить их невозможно.</div>
+        <button class="btn-download" id="btn-download-keys">📥 Скачать файл (.txt)</button>
+      </div>
     </div>
+  </div>
 </div>
 
-<!-- ══════════════════ DASHBOARD ══════════════════ -->
-<div id="dashboard-screen" style="display:none;">
-
-    <!-- HEADER -->
-    <header class="header" id="main-header">
-        <button class="sidebar-toggle" id="sidebar-toggle">☰</button>
-        
-        <div class="header-logo">
-            <span>💸 Snatch</span>
-        </div>
-
-        <div class="header-right">
-            <div class="server-time"><span id="time">--:--:--</span></div>
-            <button class="theme-toggle" id="theme-toggle" title="Переключить тему">
-                <span id="theme-icon">🌙</span>
-            </button>
-            <div class="user-pill" id="user-pill-btn" style="cursor:pointer;" title="Открыть профиль">
-                <img id="hdr-avatar" src="https://via.placeholder.com/40" alt="avatar">
-                <span id="hdr-nickname" class="user-pill-name">—</span>
-                <span id="user-role-badge" class="role-tag" style="display:none;"></span>
-            </div>
-            <button id="btn-logout" class="btn btn-danger" style="padding:8px 16px; font-size:13px;">
-                Выход
-            </button>
-        </div>
-    </header>
-
-    <!-- SIDEBAR -->
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-item active" id="menu-dashboard">
-            <span class="sidebar-item-icon">📊</span>
-            <span>Дашборд</span>
-        </div>
-        <div class="sidebar-item" id="menu-licenses">
-            <span class="sidebar-item-icon">🔑</span>
-            <span>Лицензии</span>
-        </div>
-        <div class="sidebar-item" id="menu-users" style="display:none;">
-            <span class="sidebar-item-icon">👥</span>
-            <span>Пользователи</span>
-        </div>
-    </aside>
-
-    <main id="main-content">
-
-        <!-- ── DASHBOARD VIEW ── -->
-        <div id="view-dashboard">
-
-            <!-- COMPACT STATS -->
-            <div class="compact-stats">
-                <div class="compact-stat-item">
-                    <span class="compact-stat-icon">🟢</span>
-                    <div class="compact-stat-content">
-                        <span class="compact-stat-label">Активных сессий</span>
-                        <span class="compact-stat-value green" id="stat-online">0</span>
-                    </div>
-                </div>
-                <div style="width:1px; height:40px; background:var(--border);"></div>
-                <div class="compact-stat-item">
-                    <span class="compact-stat-icon">💬</span>
-                    <div class="compact-stat-content">
-                        <span class="compact-stat-label">Отправлено чатов (всего)</span>
-                        <span class="compact-stat-value blue" id="stat-chats">0</span>
-                    </div>
-                </div>
-                <div style="width:1px; height:40px; background:var(--border);"></div>
-                <div class="compact-stat-item">
-                    <span class="compact-stat-icon">✉️</span>
-                    <div class="compact-stat-content">
-                        <span class="compact-stat-label">Отправлено писем (всего)</span>
-                        <span class="compact-stat-value purple" id="stat-letters">0</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ACTIVITY CHART -->
-            <div class="dashboard-chart" style="margin-top: 20px; margin-bottom: 20px; background: var(--surface); padding: 20px; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: 0 2px 8px var(--shadow);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                    <div>
-                        <h3 style="margin: 0; font-size: 16px; font-weight: 600; color: var(--text);">📈 График активности</h3>
-                        <p style="margin: 4px 0 0 0; font-size: 13px; color: var(--text-3);">Онлайн сессий за последние 20 минут</p>
-                    </div>
-                    <div style="font-size: 13px; color: var(--text-2); font-weight: 500;">
-                        <span id="chart-current-value" style="color: var(--primary); font-size: 20px; font-weight: 700;">0</span>
-                        <span style="margin-left: 4px;">сейчас</span>
-                    </div>
-                </div>
-                <canvas id="activityChart" height="80"></canvas>
-            </div>
-
-            <!-- ACTIVE OPERATORS (ONLINE ONLY) -->
-            <div class="panel">
-                <div class="panel-title">
-                    <div class="panel-icon" style="background:var(--success); color:white;">🟢</div>
-                    Активные операторы
-                </div>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Статус</th>
-                                <th>Имя / Инфо</th>
-                                <th>Остаток</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dashboard-active-table"></tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div><!-- /view-dashboard -->
-
-        <!-- ── LICENSES VIEW ── -->
-        <div id="view-licenses" style="display:none;">
-
-            <!-- TOP ROLE: TEAM FILTER -->
-            <div id="top-team-filter" style="display:none; margin-bottom: 20px;">
-                <div class="panel">
-                    <div class="panel-title">
-                        <div class="panel-icon">👥</div>
-                        Выберите команду для просмотра
-                    </div>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap; padding: 10px 0;">
-                        <button id="team-filter-all" class="btn btn-secondary" onclick="filterByTeam(null)" style="padding: 10px 20px;">
-                            Все команды
-                        </button>
-                        <div id="team-filter-buttons" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ALL KEYS TABLE -->
-            <div class="panel">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-                    <div class="panel-title" style="margin-bottom: 0;">
-                        <div class="panel-icon" style="background:var(--secondary-dim);">🔑</div>
-                        Все лицензии
-                    </div>
-                    <div style="display:flex; gap:12px; align-items:center; flex-wrap: wrap;">
-                        <!-- FILTERS -->
-                        <div class="filter-buttons">
-                            <button class="filter-btn active" data-filter="all">Все (<span id="filter-count-all">0</span>)</button>
-                            <button class="filter-btn" data-filter="online">Активные (<span id="filter-count-online">0</span>)</button>
-                            <button class="filter-btn" data-filter="offline">Офлайн (<span id="filter-count-offline">0</span>)</button>
-                        </div>
-                        <input type="text" id="searchKey" placeholder="Поиск..." onkeyup="filterKeysTable()" style="padding: 10px 15px; border: 1px solid var(--border); border-radius: var(--radius); width: 200px; font-size: 14px; background: var(--surface); color: var(--text);">
-                        <button class="btn btn-primary" id="btn-create-keys-modal">+ Создать</button>
-                    </div>
-                </div>
-                <div class="table-wrap">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Статус</th>
-                                <th>Имя / Инфо</th>
-                                <th>Остаток</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="licenses-table"></tbody>
-                    </table>
-                </div>
-            </div>
-
-        </div><!-- /view-licenses -->
-
-        <!-- ── USERS VIEW ── -->
-        <div id="view-users" style="display:none;">
-            <div class="users-grid">
-
-                <!-- CREATE USER (superadmin only) -->
-                <div class="panel superadmin-panel" id="superadmin-panel" style="display:none; height:fit-content;">
-                    <div class="panel-title">
-                        <div class="panel-icon" style="background:var(--secondary-dim); font-size:18px;">👑</div>
-                        Создать пользователя
-                    </div>
-                    <div class="form-group">
-                        <label>Логин для входа</label>
-                        <input type="text" id="new-user-name" placeholder="login">
-                    </div>
-                    <div class="form-group">
-                        <label>Пароль</label>
-                        <input type="text" id="new-user-pass" placeholder="password">
-                    </div>
-                    <div class="form-group">
-                        <label>Роль</label>
-                        <select id="new-user-role">
-                            <option value="team">Команда (Владелец ключей)</option>
-                            <option value="admin">Админ (Наблюдатель)</option>
-                            <option value="top">Топ (Наблюдатель команд)</option>
-                            <option value="superadmin">Супер-Админ</option>
-                        </select>
-                    </div>
-                    <button id="btn-create-user" class="btn btn-secondary btn-full" style="margin-top:8px;">
-                        Добавить пользователя
-                    </button>
-                </div>
-
-                <!-- ALL USERS TABLE -->
-                <div class="panel" style="overflow:hidden; grid-column:2;">
-                    <div class="panel-title">
-                        <div class="panel-icon" style="background:rgba(6,182,212,.1);">👥</div>
-                        Все пользователи системы
-                    </div>
-                    <div class="table-wrap">
-                        <table style="white-space:nowrap;">
-                            <thead>
-                                <tr>
-                                    <th>Профиль</th>
-                                    <th>Telegram</th>
-                                    <th>Роль</th>
-                                    <th>Связи / Ключи</th>
-                                    <th>Действия</th>
-                                </tr>
-                            </thead>
-                            <tbody id="all-users-table"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
-        </div><!-- /view-users -->
-
-    </main>
-</div>
-
-<!-- ══════════════════ MODAL ══════════════════ -->
-<div id="op-modal-overlay" style="display:none;">
-    <div class="modal-panel" style="max-width:900px;">
-        <div class="modal-header">
-            <div class="modal-title" id="op-modal-title">Детали оператора</div>
-            <button class="modal-close" onclick="document.getElementById('op-modal-overlay').style.display='none'">&times;</button>
-        </div>
-        
-        <!-- TABS -->
-        <div class="modal-tabs">
-            <button class="modal-tab active" data-tab="rotation">🔄 Текущая ротация</button>
-            <button class="modal-tab" data-tab="settings">⚙️ Все настройки</button>
-        </div>
-        
-        <div id="op-modal-content">
-            <div class="tab-content active" id="tab-rotation"></div>
-            <div class="tab-content" id="tab-settings"></div>
-        </div>
+<!-- ══════════════════════════════════════════
+     CONFIRM DIALOG  (id=confirmToast, app.js)
+══════════════════════════════════════════ -->
+<div id="confirmToast">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑</div>
+    <div class="confirm-title">Удалить лицензию?</div>
+    <div class="confirm-text">Это действие необратимо. Оператор будет отключён немедленно.</div>
+    <div class="confirm-row">
+      <button class="btn btn-secondary" id="toastCancel">Отмена</button>
+      <button class="btn btn-danger" id="toastConfirm">Удалить</button>
     </div>
+  </div>
 </div>
 
-<!-- PROFILE MODAL -->
-<div id="profile-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; backdrop-filter: blur(8px);">
-    <div class="modal-panel" style="max-width:500px;">
-        <div class="modal-header">
-            <div class="modal-title">Мой Профиль</div>
-            <button class="modal-close" onclick="document.getElementById('profile-modal-overlay').style.display='none'">&times;</button>
-        </div>
-        <div style="padding:20px 0;">
-            <div class="profile-layout">
-                <div class="avatar-wrap">
-                    <img id="prof-avatar-preview" src="https://via.placeholder.com/100" alt="avatar">
-                    <div class="avatar-edit-btn" onclick="document.getElementById('prof-avatar-file').click()" title="Сменить фото">📷</div>
-                </div>
-                <div class="profile-fields">
-                    <input type="file" id="prof-avatar-file" accept="image/*" style="display:none;">
-                    <button class="upload-btn" id="btn-upload-avatar">Выбрать фото профиля</button>
-                    <input type="hidden" id="prof-avatar-base64">
-                    <div class="form-group" style="margin-top:12px;">
-                        <label>Никнейм</label>
-                        <input type="text" id="prof-nickname" placeholder="Ваше имя">
-                    </div>
-                    <div class="form-group">
-                        <label>Telegram (без @)</label>
-                        <input type="text" id="prof-telegram" placeholder="username">
-                    </div>
-                    <div class="form-group">
-                        <label>Новый пароль</label>
-                        <input type="password" id="prof-new-pass" placeholder="Оставьте пустым, если не меняете">
-                    </div>
-                    <button id="btn-save-profile" class="btn btn-primary" style="width:100%; margin-top:8px;">
-                        Сохранить профиль
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- CREATE KEYS MODAL -->
-<div id="create-keys-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; backdrop-filter: blur(8px);">
-    <div class="modal-panel" style="max-width:500px;">
-        <div class="modal-header">
-            <div class="modal-title">🔑 Создать лицензии</div>
-            <button class="modal-close" onclick="document.getElementById('create-keys-modal').style.display='none'">&times;</button>
-        </div>
-        <div style="padding:20px 0;">
-            <div class="form-group" id="team-select-group" style="display:none;">
-                <label>Привязать к команде</label>
-                <select id="key-team-owner">
-                    <option value="me">Оставить себе</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Количество ключей</label>
-                <input type="number" id="key-count" value="1" min="1" max="50">
-            </div>
-            <div class="form-group">
-                <label>Срок действия</label>
-                <select id="key-duration">
-                    <option value="3">3 Дня (тест)</option>
-                    <option value="7">7 Дней</option>
-                    <option value="30">30 Дней</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label>Примечание / Имя работника</label>
-                <input type="text" id="key-note" placeholder="Например: Иван">
-            </div>
-            <button id="btn-generate" class="btn btn-primary btn-full">
-                Сгенерировать ключи
-            </button>
-
-            <!-- KEY RESULT — DOWNLOAD BOX -->
-            <div id="new-key-result" class="key-download-box">
-                <div class="kd-label">✅ Ключи успешно сгенерированы</div>
-                <div id="key-result-info" class="key-info-row">
-                    <span class="ki-text">Готово к скачиванию</span>
-                    <span class="ki-count" id="key-result-count">0 шт.</span>
-                </div>
-                <p style="font-size: 12px; color: var(--warning); margin: 8px 0 12px 0; font-weight: 600;">
-                    ⚠️ ВАЖНО: Скачайте файл прямо сейчас!
-                </p>
-                <p style="font-size: 11px; color: var(--text-3); margin: 0 0 12px 0; line-height: 1.5;">
-                    Оригинальные ключи доступны только при генерации и не хранятся в системе. После закрытия этого окна вы не сможете их восстановить. В таблице показываются только ID для идентификации операторов.
-                </p>
-                <button class="btn-download" id="btn-download-keys">
-                    📥 Скачать файл с ключами (.txt)
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div id="confirmToast" class="toast-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:10000; align-items:center; justify-content:center; backdrop-filter: blur(5px);">
-    <div class="toast-content" style="background:var(--surface); padding:24px 28px; border-radius:var(--radius-lg); text-align:center; max-width:400px; box-shadow: 0 8px 32px var(--shadow-lg); border: 1px solid var(--border);">
-        <h3 style="margin-top:0; color:var(--text); font-size:18px; font-weight:600; margin-bottom:8px;">Удаление лицензии</h3>
-        <p style="color:var(--text-2); margin-bottom:20px; font-size:14px; line-height:1.5;">Вы уверены, что хотите удалить этот ключ? Это действие необратимо.</p>
-        <div style="display:flex; justify-content:space-between; gap:15px;">
-            <button id="toastCancel" class="btn btn-secondary" style="flex:1;">Отмена</button>
-            <button id="toastConfirm" class="btn btn-danger" style="flex:1;">Удалить</button>
-        </div>
-    </div>
-</div>
+<!-- app.js creates its own .snatch-toast dynamically -->
 
 <script src="js/app.js"></script>
 <script src="js/top-role.js"></script>
+<script>
+/* ── GLUE: wires up new HTML IDs that differ from original ─────── */
+
+// Profile modal: open via header button and sidebar pill
+document.getElementById('btn-profile-open')?.addEventListener('click', () => {
+  document.getElementById('profile-modal-overlay').style.display = 'flex';
+});
+document.getElementById('profile-modal-close')?.addEventListener('click', () => {
+  if (window.forceRenameMode) return;
+  document.getElementById('profile-modal-overlay').style.display = 'none';
+});
+
+// Sidebar active nav glue (app.js uses .sidebar-item for active)
+['dashboard','licenses','users','mans'].forEach(v => {
+  document.getElementById('menu-' + v)?.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+    document.getElementById('menu-' + v)?.classList.add('active');
+  });
+});
+
+// Users search
+window.filterUsersTable = function() {
+  const q = (document.getElementById('searchUsers')?.value || '').toLowerCase();
+  document.querySelectorAll('#all-users-table tr').forEach(tr => {
+    tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  });
+};
+
+// Update licenses nav badge when table updates
+function updateLicenseBadge() {
+  const all = document.getElementById('filter-count-all')?.textContent;
+  const badge = document.getElementById('nav-badge-licenses');
+  if (all && badge) { badge.textContent = all; badge.style.display = 'inline-block'; }
+}
+const _badgeObserver = new MutationObserver(updateLicenseBadge);
+const _licTable = document.getElementById('licenses-table');
+if (_licTable) _badgeObserver.observe(_licTable, { childList: true });
+</script>
 </body>
 </html>

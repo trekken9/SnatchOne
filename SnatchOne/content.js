@@ -554,6 +554,37 @@ function sendTokenToSW() {
     .ah-earnings-portal { display: none !important; }
     .ah-pinned-wrapper { display: none !important; }
 
+    /* --- BLUR CLASSES (CSS-инъекция вместо inline стилей) --- */
+    .sn-blurred {
+      width: 100%; height: 100%;
+      filter: blur(3px) grayscale(1);
+      opacity: 0.35;
+      pointer-events: none;
+      user-select: none;
+    }
+    .sn-blur-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(245, 246, 250, 0.88);
+      backdrop-filter: blur(4px);
+      z-index: 10; gap: 14px;
+    }
+    .sn-locked-card-bg {
+      filter: blur(3px) grayscale(1);
+      opacity: 0.3;
+      pointer-events: none;
+      user-select: none;
+    }
+    .sn-locked-card-overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(248, 249, 250, 0.88);
+      backdrop-filter: blur(1px);
+      gap: 10px;
+    }
+
     /* --- ОСНОВА --- */
     #ah-overlay {
       position: fixed; inset: 0; background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(4px);
@@ -822,6 +853,22 @@ function sendTokenToSW() {
     }
     textarea:focus, #inv-input:focus, #ltr-input:focus { border-color: var(--sa); background: #fff; }
     .gallery-item { border: 1px solid #444; }
+    
+    /* Drag Selection Styles */
+    .ah-media-grid-item { 
+      transition: all 0.15s ease; 
+      user-select: none; 
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+    .ah-media-grid-item.dragging-active {
+      cursor: grabbing !important;
+    }
+    .ah-media-grid-item:active {
+      cursor: grabbing;
+    }
+    
     select { padding: 8px 12px; border: 2px solid #f1f2f6; border-radius: 8px; background: #fff; outline: none; }
   `),
   chrome.storage.local.get("snAutoBackup", (e) => {
@@ -1215,6 +1262,7 @@ function expandModal() {
       "Letters",
       "Tools",
       "Media Tools",
+      "Logs"
     ].map((e, t) =>
       elt(
         "div",
@@ -1242,6 +1290,7 @@ function selectTab(e) {
   t.innerHTML = "";
   if (3 === e) { renderTools(t); return; }
   if (4 === e) { renderMediaTools(t); return; }
+  if (5 === e) { renderLogs(t); return; }
 
   // Вкладки Main (0), Invites (1), Letters (2)
   if (0 === e || 1 === e || 2 === e) {
@@ -1256,21 +1305,14 @@ function selectTab(e) {
 
     // Ключа нет — показываем заблюренный контент + оверлей с вводом ключа
     const wrapper = elt("div", { style: "position:relative;width:100%;height:100%;overflow:hidden;" });
-    const contentBg = elt("div", { style: "width:100%;height:100%;filter:blur(3px) grayscale(1);opacity:0.35;pointer-events:none;user-select:none;" });
+    const contentBg = elt("div", { class: "sn-blurred" });
     if (0 === e) renderMain(contentBg);
     else if (1 === e) renderInvites(contentBg);
     else renderLetters(contentBg);
     wrapper.append(contentBg);
 
     // Оверлей с полем ввода ключа
-    const overlay = elt("div", {
-      style: [
-        "position:absolute;inset:0;",
-        "display:flex;flex-direction:column;align-items:center;justify-content:center;",
-        "background:rgba(245,246,250,0.88);backdrop-filter:blur(4px);",
-        "z-index:10;gap:14px;",
-      ].join("")
-    });
+    const overlay = elt("div", { class: "sn-blur-overlay" });
 
     const lockIcon = elt("div", { style: "font-size:48px;line-height:1;filter:drop-shadow(0 4px 12px rgba(0,0,0,0.12));" }, "🔑");
 
@@ -2545,18 +2587,11 @@ function renderTools(e) {
     }
 
     // Фоновый контент (размытый)
-    const bg = elt("div", { style: "filter:blur(3px) grayscale(1);opacity:0.3;pointer-events:none;user-select:none;" });
+    const bg = elt("div", { class: "sn-locked-card-bg" });
     bgChildren.forEach(c => c && bg.append(c));
     card.append(bg);
     // Оверлей
-    const overlay = elt("div", {
-      style: [
-        "position:absolute;inset:0;",
-        "display:flex;flex-direction:column;align-items:center;justify-content:center;",
-        "background:rgba(248,249,250,0.88);backdrop-filter:blur(1px);",
-        "gap:10px;",
-      ].join("")
-    });
+    const overlay = elt("div", { class: "sn-locked-card-overlay" });
     overlay.append(
       elt("div", { style: "font-size:13px;font-weight:700;color:#636e72;font-family:'Inter',system-ui,sans-serif;" }, "🔒 Доступно по подписке"),
       elt("a", {
@@ -2976,6 +3011,7 @@ function renderTools(e) {
             const rawDate =
               findDeep(res, "created_at") || findDeep(res, "date_created");
             let createdStr = "—";
+            let regColor = "#00b894"; // default green (fallback)
             if (rawDate) {
               let dateVal = rawDate;
               // Защита от Unix формата (секунды vs миллисекунды)
@@ -2990,6 +3026,21 @@ function renderTools(e) {
                   hour: "2-digit",
                   minute: "2-digit",
                 });
+                // --- УСЛОВНОЕ ФОРМАТИРОВАНИЕ ПО ДАТЕ РЕГИСТРАЦИИ ---
+                const now = Date.now();
+                const diffMs = now - pDate.getTime();
+                const diffDays = diffMs / (1000 * 60 * 60 * 24);
+                if (diffDays < 14) {
+                  regColor = "#00b894"; // Зеленый — до 2 недель (Новый)
+                } else if (diffDays < 91) {
+                  regColor = "#f9ca24"; // Золотой — 2 нед – 3 мес
+                } else if (diffDays < 365) {
+                  regColor = "#e17055"; // Красный — 3 мес – 12 мес
+                } else if (diffDays < 730) {
+                  regColor = "#0984e3"; // Синий — 12 мес – 24 мес
+                } else {
+                  regColor = "#dfe6e9"; // Белый/светлый — 24–90 мес
+                }
               }
             }
 
@@ -3042,8 +3093,7 @@ function renderTools(e) {
               elt(
                 "div",
                 {
-                  style:
-                    "font-size:12px; color:#00b894; margin-top:4px; font-weight:600",
+                  style: `font-size:12px; color:${regColor}; margin-top:4px; font-weight:600; padding:2px 8px; border-radius:8px; background:${regColor}22; display:inline-block;`,
                 },
                 `Рег: ${createdStr}`,
               ),
@@ -5152,7 +5202,11 @@ function renderMediaTools(e) {
     const topDelBtn = elt("button", {
       id: "ah-top-del-btn",
       style: "display:none;padding:7px 16px;background:#ff7675;color:#fff;border:none;border-radius:20px;cursor:pointer;font-weight:700;font-size:13px;margin-left:auto;",
-      onclick: () => { const b = document.getElementById("ah-inner-del-btn"); if (b) b.click(); },
+      onclick: () => { 
+        if (window.__ahMediaToolsDelete) {
+          window.__ahMediaToolsDelete();
+        }
+      },
     }, "🗑 Удалить");
 
     ["Удаление", "Загрузка"].forEach((tabName) => {
@@ -5219,15 +5273,6 @@ function renderMediaTools(e) {
       { style: "font-weight:bold;font-size:13px" },
       "Выбрано: 0",
     );
-    const btnDel = elt(
-      "button",
-      {
-        id: "ah-inner-del-btn",
-        style: "width:100%;margin-top:15px;padding:12px;background:#ff7675;color:#fff;border:none;border-radius:8px;cursor:pointer;display:none",
-        onclick: executeDelete,
-      },
-      "Удалить выбранные",
-    );
 
     const grid = elt("div", {
       style: "display:grid;grid-template-columns:repeat(auto-fill, minmax(95px, 1fr));gap:8px;max-height:450px;overflow-y:auto;align-items:start",
@@ -5267,7 +5312,7 @@ function renderMediaTools(e) {
       ),
     );
 
-    container.append(typeTabs, toolsBar, grid, btnDel);
+    container.append(typeTabs, toolsBar, grid);
 
     grid.innerHTML =
       "<div style='grid-column:1/-1;text-align:center;padding:20px'>Загрузка...</div>";
@@ -5306,26 +5351,86 @@ function renderMediaTools(e) {
         return;
       }
 
-      allMedia.forEach((item) => {
+      // Переменные для drag selection
+      let isDragging = false;
+      let didDragMove = false;
+      let suppressNextClick = false;
+      let dragSelectMode = true;
+      let startItemId = null;
+      let startItemEl = null;
+      const itemElements = new Map(); // id -> element
+
+      allMedia.forEach((item, index) => {
         const sel = selectedIds.has(item.id);
         const el = elt("div", {
-          style: `position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;border:3px solid ${sel ? "#ff7675" : "transparent"};transform:${sel ? "scale(0.95)" : "scale(1)"}`,
+          className: "ah-media-grid-item",
+          style: `position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;border:3px solid ${sel ? "#ff7675" : "transparent"};transform:${sel ? "scale(0.95)" : "scale(1)"};transition:all 0.15s;user-select:none;`,
+          "data-item-id": item.id,
         });
-        // Левый клик = мгновенный выбор, Правый клик = просмотр
-        el.addEventListener("click", () => {
+
+        // Сохраняем элемент для быстрого доступа
+        itemElements.set(item.id, el);
+
+        // Левый клик = выбор. Drag selection меняет состояние на mousedown,
+        // поэтому обычный click после drag нельзя обрабатывать второй раз.
+        el.addEventListener("click", (e) => {
+          if (suppressNextClick) {
+            suppressNextClick = false;
+            return;
+          }
+          if (isDragging || didDragMove) return;
           if (selectedIds.has(item.id)) selectedIds.delete(item.id);
           else selectedIds.add(item.id);
           refreshGrid();
         });
+
+        // Правый клик = просмотр
         el.addEventListener("contextmenu", (ev) => {
           ev.preventDefault();
           openLightbox(item);
         });
-        void el;
+
+        // Начало drag selection
+        el.addEventListener("mousedown", (e) => {
+          if (e.button !== 0) return; // Только левая кнопка
+          isDragging = true;
+          didDragMove = false;
+          suppressNextClick = false;
+          dragSelectMode = !selectedIds.has(item.id);
+          startItemId = item.id;
+          startItemEl = el;
+          
+          // Добавляем класс для изменения курсора
+          grid.style.cursor = "grabbing";
+          grid.querySelectorAll(".ah-media-grid-item").forEach(item => {
+            item.style.cursor = "grabbing";
+          });
+          
+          e.preventDefault(); // Предотвращаем выделение текста
+        });
+
+        // Наведение во время драга
+        el.addEventListener("mouseenter", (e) => {
+          if (!isDragging) return;
+          didDragMove = true;
+          if (startItemId && startItemEl) {
+            if (dragSelectMode) selectedIds.add(startItemId);
+            else selectedIds.delete(startItemId);
+            updateItemVisual(startItemEl, selectedIds.has(startItemId));
+          }
+          
+          if (dragSelectMode) {
+            selectedIds.add(item.id);
+          } else {
+            selectedIds.delete(item.id);
+          }
+          
+          updateItemVisual(el, selectedIds.has(item.id));
+        });
 
         const img = elt("img", {
           src: item.thumb,
-          style: "width:100%;height:100%;object-fit:cover",
+          style: "width:100%;height:100%;object-fit:cover;pointer-events:none;",
         });
 
         // FIX: Обработка битых картинок
@@ -5355,26 +5460,81 @@ function renderMediaTools(e) {
         grid.append(el);
       });
 
-      const _cnt = selectedIds.size;
-      statusLabel.textContent = `Выбрано: ${_cnt}`;
-      btnDel.style.display = _cnt > 0 ? "block" : "none";
-      // Синхронизируем кнопку сверху
-      const _topDelBtn = document.getElementById("ah-top-del-btn");
-      if (_topDelBtn) {
-        _topDelBtn.style.display = _cnt > 0 ? "inline-block" : "none";
-        _topDelBtn.textContent = _cnt > 0 ? `🗑 Удалить (${_cnt})` : "🗑 Удалить";
+      // Глобальные обработчики для завершения drag selection
+      const handleMouseUp = () => {
+        if (isDragging) {
+          if (didDragMove) {
+            suppressNextClick = true;
+          }
+          isDragging = false;
+          startItemId = null;
+          startItemEl = null;
+          
+          // Возвращаем курсор
+          grid.style.cursor = "";
+          grid.querySelectorAll(".ah-media-grid-item").forEach(item => {
+            item.style.cursor = "pointer";
+          });
+          
+          updateStatusLabel();
+          didDragMove = false;
+        }
+      };
+
+      const handleMouseLeave = () => {
+        if (isDragging) {
+          isDragging = false;
+          startItemId = null;
+          startItemEl = null;
+          didDragMove = false;
+          
+          // Возвращаем курсор
+          grid.style.cursor = "";
+          grid.querySelectorAll(".ah-media-grid-item").forEach(item => {
+            item.style.cursor = "pointer";
+          });
+          
+          updateStatusLabel();
+        }
+      };
+
+      // Удаляем старые обработчики если есть
+      grid.removeEventListener("mouseup", handleMouseUp);
+      grid.removeEventListener("mouseleave", handleMouseLeave);
+      document.removeEventListener("mouseup", handleMouseUp);
+      
+      // Добавляем новые
+      grid.addEventListener("mouseup", handleMouseUp);
+      grid.addEventListener("mouseleave", handleMouseLeave);
+      document.addEventListener("mouseup", handleMouseUp); // Глобальный обработчик
+
+      // Функция для обновления визуала элемента
+      function updateItemVisual(element, isSelected) {
+        element.style.border = isSelected ? "3px solid #ff7675" : "3px solid transparent";
+        element.style.transform = isSelected ? "scale(0.95)" : "scale(1)";
       }
-      const _topBtn = document.getElementById("ah-top-del-btn");
-      if (_topBtn) {
-        _topBtn.style.display = _cnt > 0 ? "inline-block" : "none";
-        _topBtn.textContent = _cnt > 0 ? `🗑 Удалить (${_cnt})` : "🗑 Удалить";
+
+      // Функция для обновления счетчика
+      function updateStatusLabel() {
+        const _cnt = selectedIds.size;
+        statusLabel.textContent = `Выбрано: ${_cnt}`;
+        const _topDelBtn = document.getElementById("ah-top-del-btn");
+        if (_topDelBtn) {
+          _topDelBtn.style.display = _cnt > 0 ? "inline-block" : "none";
+          _topDelBtn.textContent = _cnt > 0 ? `🗑 Удалить (${_cnt})` : "🗑 Удалить";
+        }
       }
+
+      updateStatusLabel();
     }
 
     async function executeDelete() {
       if (!confirm("Удалить?")) return;
-      btnDel.textContent = "Удаление...";
-      btnDel.disabled = true;
+      const _topDelBtn = document.getElementById("ah-top-del-btn");
+      if (_topDelBtn) {
+        _topDelBtn.textContent = "⏳ Удаление...";
+        _topDelBtn.disabled = true;
+      }
       const token = localStorage.getItem("token");
       const ids = Array.from(selectedIds);
       let done = 0;
@@ -5387,17 +5547,24 @@ function renderMediaTools(e) {
           });
           selectedIds.delete(id);
           done++;
-          btnDel.textContent = `Удаление... ${done}/${ids.length}`;
+          if (_topDelBtn) {
+            _topDelBtn.textContent = `⏳ ${done}/${ids.length}`;
+          }
         } catch (err) {
           console.error("deleteMedia error:", err);
         }
       }
-      btnDel.disabled = false;
+      if (_topDelBtn) {
+        _topDelBtn.disabled = false;
+      }
       selectedIds.clear();
       // Сбрасываем кэш медиа для текущего профиля, чтобы список обновился
       MEDIA_CACHE.delete(`${currentPid}_${activeMediaType}`);
       renderRightSide();
     }
+
+    // Привязываем executeDelete к верхней кнопке через глобальную функцию
+    window.__ahMediaToolsDelete = executeDelete;
   }
 
   function renderUploadUI(contentArea) {
@@ -5409,7 +5576,7 @@ function renderMediaTools(e) {
         style:
           "background:#e8f8f5; padding:15px; border-radius:8px; color:var(--sa); font-size:13px; margin-bottom:15px; border:1px solid var(--sa)",
       },
-      "📷 Выберите фото или видео — без лимита. Бот загружает напрямую через API.",
+      "📷 Выберите фото или видео — без лимита. Бот загружает напрямую через API. Также можно перетащить файлы в зону загрузки.",
     );
 
     const fileInput = elt("input", {
@@ -5423,12 +5590,56 @@ function renderMediaTools(e) {
     const uploadBtn = elt(
       "button",
       {
+        id: "ah-upload-btn",
         style:
           "width:100%; padding:20px; border:2px dashed #b2bec3; background:#fafbfc; color:#636e72; font-weight:600; cursor:pointer; border-radius:12px; font-size:15px; transition:.2s",
         onclick: () => fileInput.click(),
       },
-      "📂 Выбрать фото / видео",
+      "📂 Загрузить еще",
     );
+
+    // Drag and Drop обработчики
+    const dropZone = uploadBtn;
+    let dragCounter = 0;
+
+    dropZone.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter++;
+      dropZone.style.borderColor = 'var(--sa)';
+      dropZone.style.background = 'var(--sa-light)';
+      dropZone.style.transform = 'scale(1.02)';
+    });
+
+    dropZone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter--;
+      if (dragCounter === 0) {
+        dropZone.style.borderColor = '#b2bec3';
+        dropZone.style.background = '#fafbfc';
+        dropZone.style.transform = 'scale(1)';
+      }
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounter = 0;
+      dropZone.style.borderColor = '#b2bec3';
+      dropZone.style.background = '#fafbfc';
+      dropZone.style.transform = 'scale(1)';
+      
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        handleFilesSelect(files);
+      }
+    });
 
     const logArea = elt("div", {
       style:
@@ -5443,6 +5654,7 @@ function renderMediaTools(e) {
 
       isUploading = true;
       uploadBtn.disabled = true;
+      uploadBtn.textContent = "⏳ Загрузка...";
       logArea.style.display = "block";
       logArea.innerHTML = "";
 
@@ -5700,6 +5912,210 @@ function numberInput(e, t, n) {
     }),
   );
 }
+
+function serverLogLineColor(line) {
+  const text = String(line || "");
+  if (/✅|УСПЕШНО|ДОСТАВЛЕНО|Подключился/i.test(text)) return "#22c55e";
+  if (/❌|ОШИБКА|ERROR|КРИТИЧЕСКАЯ|Блокировка/i.test(text)) return "#ef4444";
+  if (/ДИСКОННЕКТ|WARN|⚠|1005|1006/i.test(text)) return "#f59e0b";
+  if (/WS|ПОДКЛЮЧЕНИЕ|🌐/i.test(text)) return "#60a5fa";
+  if (/↳|Сторона|Время сессии/i.test(text)) return "#64748b";
+  return "#94a3b8";
+}
+
+function renderServerLogLine(line) {
+  return elt(
+    "div",
+    {
+      style: `font-size:11px;line-height:1.65;color:${serverLogLineColor(line)};padding:1px 0;border-bottom:1px solid rgba(255,255,255,0.04);white-space:pre-wrap;word-break:break-word;`,
+    },
+    String(line || ""),
+  );
+}
+
+function getServerBaseHost() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(["snBaseHost"], (store) => {
+      const base = (store.snBaseHost || "https://snat4.com/").replace(/\/$/, "");
+      resolve(base);
+    });
+  });
+}
+
+async function fetchServerOperatorLogs(authHash, operatorId) {
+  const base = await getServerBaseHost();
+  const res = await fetch(`${base}/api/operator-logs?limit=500`, {
+    method: "GET",
+    headers: {
+      "SN-Auth": authHash || "",
+      "SN-OperatorID": operatorId || "",
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.status === false) {
+    throw new Error(data.msg || data.error || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+// ─── LOGS TAB ───────────────────────────────────────────────
+function renderLogs(container) {
+  const settings = loadSet();
+  const currentHash = settings.authKey || "";
+  const currentOperator = settings.operatorId || "";
+  let serverLogsUnavailable = false;
+  const wrapper = elt("div", {
+    style: "display:flex;flex-direction:column;height:100%;background:#0f172a;"
+  });
+
+  // Header
+  const header = elt("div", {
+    style: "padding:12px 16px;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center;background:#0f172a;position:sticky;top:0;z-index:10;"
+  });
+  
+  header.append(elt("div", { style: "font-weight:600;font-size:14px;color:#f8fafc;" }, `Логи оператора${currentOperator ? " #" + currentOperator : ""}`));
+  
+  const refreshBtn = elt("button", {
+    style: "padding:4px 10px;background:#1e293b;border:1px solid #334155;color:#94a3b8;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;margin-left:8px;",
+    onclick: () => loadLogs(),
+  }, "🔄 Обновить");
+  refreshBtn.onmouseover = () => refreshBtn.style.color = "#f8fafc";
+  refreshBtn.onmouseout = () => refreshBtn.style.color = "#94a3b8";
+
+  const clearBtn = elt("button", {
+    style: "padding:4px 10px;background:#1e293b;border:1px solid #334155;color:#94a3b8;border-radius:6px;font-size:12px;cursor:pointer;transition:all 0.2s;margin-left:8px;",
+    onclick: () => {
+      chrome.storage.local.set({ snLogs: [] });
+      renderLocalLogItems([]);
+    }
+  }, "Очистить локальные");
+  clearBtn.onmouseover = () => clearBtn.style.color = "#f8fafc";
+  clearBtn.onmouseout = () => clearBtn.style.color = "#94a3b8";
+  
+  header.append(elt("div", { style: "display:flex;align-items:center;" }, refreshBtn, clearBtn));
+  wrapper.append(header);
+
+  // List Container
+  const listContainer = elt("div", {
+    style: "flex:1;overflow-y:auto;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;"
+  });
+  wrapper.append(listContainer);
+
+  const renderServerLogItems = (payload) => {
+    const logs = payload?.logs || [];
+    listContainer.innerHTML = "";
+    if (!logs.length) {
+      listContainer.append(elt("div", { style: "color:#64748b;text-align:center;margin-top:20px;font-family:system-ui,sans-serif;" }, "Серверных логов этого оператора пока нет..."));
+      return;
+    }
+    listContainer.append(
+      elt("div", { style: "display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;color:#64748b;font-family:system-ui,sans-serif;font-size:12px;" },
+        elt("span", {}, `Последние ${logs.length} строк`),
+        elt("span", {}, payload.operatorName ? `Сервер: ${payload.operatorName}` : "Серверные логи"),
+      ),
+    );
+    const box = elt("div", {
+      style: "background:#111827;border:1px solid #1f2937;border-radius:8px;padding:10px;max-height:520px;overflow:auto;",
+    });
+    logs.forEach((line) => box.append(renderServerLogLine(line)));
+    listContainer.append(box);
+    setTimeout(() => { box.scrollTop = box.scrollHeight; }, 30);
+  };
+
+  const renderLocalLogItems = (logs) => {
+    listContainer.innerHTML = "";
+    const scopedLogs = (logs || []).filter((log) => {
+      if (!currentHash && !currentOperator) return true;
+      const sameHash = currentHash && log.hash && String(log.hash) === String(currentHash);
+      const sameOperator = currentOperator && log.operatorId && String(log.operatorId) === String(currentOperator);
+      const legacy = !log.hash && !log.operatorId;
+      return sameHash || sameOperator || legacy;
+    });
+    if (!scopedLogs || scopedLogs.length === 0) {
+      listContainer.append(elt("div", { style: "color:#64748b;text-align:center;margin-top:20px;font-family:system-ui,sans-serif;" }, "Логов этого оператора пока нет..."));
+      return;
+    }
+
+    const localHint = elt("div", { style: "color:#f59e0b;font-family:system-ui,sans-serif;font-size:12px;margin-bottom:10px;" }, "Показаны локальные логи расширения: серверные логи сейчас недоступны.");
+    listContainer.append(localHint);
+
+    scopedLogs.forEach(log => {
+      const isErr = log.status === "error";
+      const isChat = log.type === "chat";
+      
+      const item = elt("div", {
+        style: `padding:8px 12px;border-radius:6px;border-left:3px solid ${isErr ? "#ef4444" : "#10b981"};background:#1e293b;color:#cbd5e1;display:flex;flex-direction:column;gap:4px;`
+      });
+
+      const topRow = elt("div", { style: "display:flex;justify-content:space-between;align-items:center;" });
+      
+      const timeStr = new Date(log.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
+      const timeEl = elt("span", { style: "color:#64748b;font-size:11px;" }, timeStr);
+      
+      const typeBadge = elt("span", {
+        style: `padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:${isChat ? "rgba(59,130,246,0.15)" : "rgba(168,85,247,0.15)"};color:${isChat ? "#60a5fa" : "#c084fc"};`
+      }, isChat ? "Chat" : "Letter");
+
+      const statusBadge = elt("span", {
+        style: `padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;background:${isErr ? "rgba(239,68,68,0.15)" : "rgba(16,185,129,0.15)"};color:${isErr ? "#f87171" : "#34d399"};margin-left:auto;`
+      }, isErr ? "ERROR" : "OK");
+
+      topRow.append(timeEl, elt("span", {style:"width:8px;"}), typeBadge, statusBadge);
+      item.append(topRow);
+
+      const midRow = elt("div", { style: "display:flex;gap:12px;font-size:11px;color:#94a3b8;margin-top:2px;" });
+      midRow.append(elt("span", {}, `Woman: ${log.girl}`));
+      midRow.append(elt("span", {}, `Man: ${log.man}`));
+      item.append(midRow);
+
+      if (log.message) {
+        const msgRow = elt("div", { style: "color:#f1f5f9;margin-top:2px;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" });
+        msgRow.textContent = log.message;
+        item.append(msgRow);
+      }
+
+      listContainer.append(item);
+    });
+  };
+
+  const loadLocalLogs = () => {
+    chrome.storage.local.get("snLogs", (data) => {
+      renderLocalLogItems(data.snLogs || []);
+    });
+  };
+
+  const loadLogs = async () => {
+    if (!currentHash || serverLogsUnavailable) {
+      loadLocalLogs();
+      return;
+    }
+    listContainer.innerHTML = "";
+    listContainer.append(elt("div", { style: "color:#64748b;text-align:center;margin-top:20px;font-family:system-ui,sans-serif;" }, "Загружаю серверные логи..."));
+    try {
+      const data = await fetchServerOperatorLogs(currentHash, currentOperator);
+      renderServerLogItems(data);
+    } catch (e) {
+      if (/401|403|unauthorized|forbidden|ключ|auth/i.test(String(e?.message || e))) {
+        serverLogsUnavailable = true;
+      }
+      loadLocalLogs();
+    }
+  };
+
+  loadLogs();
+  
+  // Автообновление логов
+  const intervalId = setInterval(() => {
+    if (!document.body.contains(wrapper)) {
+      clearInterval(intervalId);
+      return;
+    }
+    loadLogs();
+  }, 10000);
+
+  container.append(wrapper);
+}
+
 function resetAuthUI() {
   cleanupAuthUI();
   const modal = document.getElementById("ah-modal");
@@ -5733,7 +6149,7 @@ function openStarMenu(e) {
             o = URL.createObjectURL(t);
           (Object.assign(document.createElement("a"), {
             href: o,
-            download: "alpha_helper_backup.json",
+            download: "snatch_backup.json",
           }).click(),
             setTimeout(() => URL.revokeObjectURL(o), 800),
             n.remove());
@@ -6595,15 +7011,8 @@ class ContentEarningsPanelWidget {
     if (!target || !this.root) return;
     this.mountParent = target;
 
-    // Используем портал inject.js как стабильную точку привязки
-    const portal = document.querySelector('.ah-earnings-portal');
-    if (portal && portal.parentElement === target) {
-      // Вставляем перед порталом; portal.previousSibling проверка предотвращает повторные вставки
-      if (portal.previousSibling !== this.root) {
-        target.insertBefore(this.root, portal);
-      }
-    } else if (!target.contains(this.root)) {
-      // Портала нет — вставляем только если виджет вообще не в контейнере
+    // Всегда вставляем в самое начало контейнера (перед всеми уведомлениями)
+    if (target.firstChild !== this.root) {
       target.insertBefore(this.root, target.firstChild);
     }
   }
@@ -6647,7 +7056,8 @@ class ContentEarningsPanelWidget {
     st.textContent =
       "#sn-content-earnings.sne-earn{box-sizing:border-box;width:100%;max-width:100%;" +
       "margin:0 0 12px;padding:0;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;" +
-      "font-size:13px;color:#171717;-webkit-font-smoothing:antialiased;}" +
+      "font-size:13px;color:#171717;-webkit-font-smoothing:antialiased;" +
+      "position:sticky;top:0;z-index:100;background:#fff;}" +
       "#sn-content-earnings .sne-earn__inner{position:relative;background:#fafafa;" +
       "border:1px solid #e8e8e8;border-radius:14px;padding:14px 14px 12px;" +
       "box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px -12px rgba(0,0,0,.08);}" +
@@ -7172,6 +7582,7 @@ if (document.readyState === "loading") {
   const STORAGE_KEY = "ADB_chat_limits_v1";
   const CHANNEL = "adb-invites";
   const INTERVAL_MS = 30_000; // каждые 30 секунд
+  const disabledFilters = new Set();
 
   let bc = null;
   try { bc = new BroadcastChannel(CHANNEL); } catch { }
@@ -7182,6 +7593,7 @@ if (document.readyState === "loading") {
 
     // Определяем фильтр — берём текущий из URL или дефолт
     const filter = location.href.includes("chance") ? "chance" : "chat";
+    if (disabledFilters.has(filter)) return;
 
     try {
       const res = await fetch(
@@ -7195,6 +7607,10 @@ if (document.readyState === "loading") {
           },
         }
       );
+      if (res.status === 404) {
+        disabledFilters.add(filter);
+        return;
+      }
       if (!res.ok) return;
 
       const data = await res.json().catch(() => null);

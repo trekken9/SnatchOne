@@ -17,36 +17,62 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        min-width: 32px;
-        height: 32px;
-        padding: 0 8px;
-        background: #f5f5f5;
-        color: #666;
-        border: 1px solid #ddd;
-        border-radius: 16px;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        background: transparent;
+        color: #2d9d8f;
+        border: 1.5px solid #2d9d8f;
+        border-radius: 50%;
         font-size: 16px;
         cursor: pointer;
-        transition: all 0.3s ease;
-        margin: 0 4px;
+        transition: all 0.2s ease;
+        margin: 0 3px;
         white-space: nowrap;
+        flex-shrink: 0;
       }
       .chat-search-btn:hover { 
-        background: #e8e8e8;
-        border-color: #ccc;
+        background: rgba(45,157,143,0.1);
+        border-color: #1f7a70;
+        color: #1f7a70;
       }
       .chat-search-btn.loading { 
-        background: #fff9e6;
+        background: rgba(255,152,0,0.08);
         color: #ff9800;
-        border-color: #ffe0b2;
-        font-size: 12px;
-        font-weight: 500;
-        padding: 0 10px;
+        border-color: #ff9800;
+        font-size: 11px;
+        font-weight: 600;
       }
       .chat-search-btn.loaded { 
-        background: #e8f5e9;
+        background: rgba(76,175,80,0.08);
         color: #4caf50;
-        border-color: #c8e6c9;
+        border-color: #4caf50;
       }
+      .chat-force-translate-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        background: transparent;
+        color: #2d9d8f;
+        border: 1.5px solid #2d9d8f;
+        border-radius: 50%;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin: 0 3px;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .chat-force-translate-btn:hover {
+        background: rgba(45,157,143,0.1);
+        border-color: #1f7a70;
+        color: #1f7a70;
+      }
+      .chat-force-translate-btn:active { transform: scale(0.95); }
 
       #chat-search-modal {
         position: fixed;
@@ -894,6 +920,23 @@
     return btn;
   }
 
+  function createForceTranslateButton() {
+    const btn = document.createElement('button');
+    btn.className = 'chat-force-translate-btn';
+    btn.textContent = 'Ts';
+    btn.title = 'Принудительно перевести чат';
+    btn.addEventListener('click', () => {
+      if (typeof window.__snatchForceTranslateChat === 'function') {
+        window.__snatchForceTranslateChat();
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = 'Ts'; }, 900);
+      } else {
+        window.dispatchEvent(new CustomEvent('snatch-force-translate-chat'));
+      }
+    });
+    return btn;
+  }
+
   function insertButton() {
     // Ищем контейнер с кнопками чата
     let chatBottom = document.querySelector('[class*="styles_clmn_3_chat_bottom_nav"]');
@@ -904,6 +947,9 @@
 
     // Проверяем, есть ли уже кнопка поиска
     if (chatBottom.querySelector('.chat-search-btn')) {
+      if (!chatBottom.querySelector('.chat-force-translate-btn')) {
+        chatBottom.querySelector('.chat-search-btn').insertAdjacentElement('afterend', createForceTranslateButton());
+      }
       return true;
     }
 
@@ -915,6 +961,7 @@
 
     const searchBtn = createSearchButton();
     iconsContainer.appendChild(searchBtn);
+    searchBtn.insertAdjacentElement('afterend', createForceTranslateButton());
 
     return true;
   }

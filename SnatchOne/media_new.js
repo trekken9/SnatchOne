@@ -884,7 +884,9 @@ if (window.__ADGM_LOADED_VERSION__ === __ADGM_VERSION__) {
     const e = z(t);
     (R(t), buildBulkTrashBtn(t), k(e), M(t, e));
     
-    // Bug #6 fix: guard против накопления change-листенеров при повторном T()
+    // Guard против накопления change-листенеров при повторном T().
+    // Оригинальный Alpha.date media modal не должен получать нашу click/drag-логику:
+    // иначе открытие оригинала фото/видео превращается в автоматическое выделение.
     if (!t.dataset.adgmChangeBound) {
       t.dataset.adgmChangeBound = "1";
       t.addEventListener('change', (event) => {
